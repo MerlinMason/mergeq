@@ -278,14 +278,14 @@ function Empty({ outcomes, now }: { outcomes: Outcome[]; now: number }) {
     () => NOTHING_QUEUED[Math.floor(Math.random() * NOTHING_QUEUED.length)]!,
   );
   return (
-    <Panel title="QUEUE">
+    <>
       <Text color="greenBright">{greeting}</Text>
       {lastMerge ? (
         <Text color="gray" dimColor>
           You last shipped #{lastMerge.number} · {ago(lastMerge.at, now)} ago
         </Text>
       ) : null}
-    </Panel>
+    </>
   );
 }
 
@@ -360,6 +360,8 @@ function Events({ events, now }: { events: Event[]; now: number }) {
 
 const BRAND = "fruit";
 
+const PANEL_CHROME = 6;
+
 function Badge({ children }: { children?: string }) {
   return (
     <Gradient name={BRAND}>
@@ -374,7 +376,7 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
       borderStyle="round"
       borderColor="gray"
       titles={[title]}
-      titleStyles={titleStyles.rectangle}
+      titleStyles={titleStyles.pill}
       flexDirection="column"
       paddingX={1}
       marginTop={1}
@@ -519,44 +521,48 @@ export default function App({
         <Text dimColor>{"─".repeat(Math.max(10, width - 2))}</Text>
       </Gradient>
 
-      <Box>
-        {fetching ? <Spinner color="cyan" /> : <Text color="gray">·</Text>}
-        <Text> </Text>
-        {queue ? (
-          <Text>
-            <Text bold color="whiteBright">
-              {queue.totalCount}
-            </Text>
-            <Text color="gray" dimColor>
-              {" "}
-              queued
-            </Text>
-            <Text color="gray" dimColor>
-              {"   "}
-            </Text>
-            <Text>{busy.emoji} </Text>
-            <Text color={busy.color}>{busy.label}</Text>
-            {rate ? (
-              <Text color="gray" dimColor>
-                {"   "}~{minutes(rate.gapMinutes)} between merges
+      <Panel title="QUEUE">
+        <Box>
+          {fetching ? <Spinner color="cyan" /> : <Text color="gray">·</Text>}
+          <Text> </Text>
+          {queue ? (
+            <Text>
+              <Text bold color="whiteBright">
+                {queue.totalCount}
               </Text>
-            ) : null}
-          </Text>
-        ) : (
-          <Text color="gray">connecting…</Text>
-        )}
-        <Spacer />
-        {error ? <Text color="red">retrying…</Text> : null}
-        {!error && stale ? (
-          <Text color="yellow" dimColor>
-            last update {ago(updatedAt!, now)} ago
-          </Text>
-        ) : null}
-      </Box>
+              <Text color="gray" dimColor>
+                {" "}
+                queued
+              </Text>
+              <Text color="gray" dimColor>
+                {"   "}
+              </Text>
+              <Text>{busy.emoji} </Text>
+              <Text color={busy.color}>{busy.label}</Text>
+              {rate ? (
+                <Text color="gray" dimColor>
+                  {"   "}~{minutes(rate.gapMinutes)} between merges
+                </Text>
+              ) : null}
+            </Text>
+          ) : (
+            <Text color="gray">connecting…</Text>
+          )}
+          <Spacer />
+          {error ? <Text color="red">retrying…</Text> : null}
+          {!error && stale ? (
+            <Text color="yellow" dimColor>
+              last update {ago(updatedAt!, now)} ago
+            </Text>
+          ) : null}
+        </Box>
 
-      {showAll ? (
-        <Box flexDirection="column" marginTop={1}>
-          {entries.map((entry, index) => (
+        <Text color="gray" dimColor>
+          {"─".repeat(Math.max(10, width - PANEL_CHROME))}
+        </Text>
+
+        {showAll ? (
+          entries.map((entry, index) => (
             <React.Fragment key={entry.pullRequest.number}>
               {index === buildWindow && buildWindow > 0 ? (
                 <Text color="gray" dimColor>
@@ -570,31 +576,31 @@ export default function App({
                 now={now}
               />
             </React.Fragment>
-          ))}
-        </Box>
-      ) : (
-        <>
-          {mine.length > 0 ? (
-            <Panel title="QUEUE">
-              {groups.map(({ ahead, entry }) => (
-                <React.Fragment key={entry.pullRequest.number}>
-                  {ahead > 0 ? <Ahead count={ahead} rate={rate} width={width - 4} /> : null}
-                  <Mine
-                    entry={entry}
-                    checks={entry.headCommit ? checks.get(entry.headCommit.oid) : undefined}
-                    rate={rate}
-                    building={entry.position <= buildWindow}
-                    repo={target}
-                    here={entry.pullRequest.number === selectedEntry}
-                    now={now}
-                  />
-                </React.Fragment>
-              ))}
-            </Panel>
-          ) : queue ? (
-            <Empty outcomes={outcomes} now={now} />
-          ) : null}
+          ))
+        ) : mine.length > 0 ? (
+          groups.map(({ ahead, entry }) => (
+            <React.Fragment key={entry.pullRequest.number}>
+              {ahead > 0 ? (
+                <Ahead count={ahead} rate={rate} width={width - PANEL_CHROME + 2} />
+              ) : null}
+              <Mine
+                entry={entry}
+                checks={entry.headCommit ? checks.get(entry.headCommit.oid) : undefined}
+                rate={rate}
+                building={entry.position <= buildWindow}
+                repo={target}
+                here={entry.pullRequest.number === selectedEntry}
+                now={now}
+              />
+            </React.Fragment>
+          ))
+        ) : queue ? (
+          <Empty outcomes={outcomes} now={now} />
+        ) : null}
+      </Panel>
 
+      {showAll ? null : (
+        <>
           <Recently outcomes={outcomes} repo={target} selected={selectedOutcome} now={now} />
           {mine.length > 0 ? <Events events={events} now={now} /> : null}
         </>
