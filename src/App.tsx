@@ -32,6 +32,8 @@ const NO_OUTCOMES: Outcome[] = [];
 
 const RECENT_LIMIT = 6;
 
+const STARTED_AT = Date.now();
+
 export const KEY_HINTS =
   "↑↓ pick · ⏎  open PR · a toggle all/mine · o open queue · q quit";
 
@@ -250,15 +252,27 @@ function Recently({
   repo,
   selected,
   showAuthor,
+  error,
   now,
 }: {
   outcomes: Outcome[];
   repo: { owner: string; name: string };
   selected: Outcome | null;
   showAuthor: boolean;
+  error: Error | null;
   now: number;
 }) {
-  if (outcomes.length === 0) return null;
+  if (outcomes.length === 0) {
+    if (!error) return null;
+    return (
+      <Panel title="RECENTLY">
+        <Text color="red">✗ {error.message}</Text>
+        {error instanceof SetupError && error.hint[0] ? (
+          <Text dimColor>{error.hint[0]}</Text>
+        ) : null}
+      </Panel>
+    );
+  }
   return (
     <Panel title="RECENTLY">
       {outcomes.map((outcome) => {
@@ -459,8 +473,12 @@ export default function App({
   );
   const loadRate = useCallback(() => fetchRate(target), [target]);
 
-  const outcomes = usePoll(viewer ? loadOutcomes : null, 60_000) ?? NO_OUTCOMES;
-  const rate = usePoll(loadRate, 300_000);
+  const { data: outcomeData, error: outcomeError } = usePoll(
+    viewer ? loadOutcomes : null,
+    60_000,
+  );
+  const { data: rate } = usePoll(loadRate, 300_000);
+  const outcomes = outcomeData ?? NO_OUTCOMES;
 
   const seen = useRef<Set<string> | null>(null);
 
@@ -477,6 +495,7 @@ export default function App({
       if (seen.current.has(key)) continue;
       seen.current.add(key);
       if (outcome.author !== viewer) continue;
+      if (outcome.at.getTime() < STARTED_AT) continue;
 
       const reason = reasonOf(outcome.reason);
       if (outcome.kind === "merged") {
@@ -659,6 +678,7 @@ export default function App({
         repo={target}
         selected={selectedOutcome}
         showAuthor={showAll}
+        error={outcomeError}
         now={now}
       />
       {!showAll && mine.length > 0 ? <Events events={events} now={now} /> : null}

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 export function usePoll<T>(load: (() => Promise<T>) | null, intervalMs: number) {
   const [data, setData] = useState<T | null>(null);
+  const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
     if (!load) return;
@@ -11,9 +12,14 @@ export function usePoll<T>(load: (() => Promise<T>) | null, intervalMs: number) 
     const loop = async () => {
       try {
         const next = await load();
-        if (!cancelled) setData(next);
-      } catch {
-        // a stale value beats an empty panel; the next tick will retry
+        if (!cancelled) {
+          setData(next);
+          setError(null);
+        }
+      } catch (caught) {
+        // a stale value beats an empty panel, but a panel that never fills
+        // should say why rather than look merely quiet
+        if (!cancelled) setError(caught as Error);
       }
       if (!cancelled) timer = setTimeout(loop, intervalMs);
     };
@@ -25,5 +31,5 @@ export function usePoll<T>(load: (() => Promise<T>) | null, intervalMs: number) 
     };
   }, [load, intervalMs]);
 
-  return data;
+  return { data, error };
 }

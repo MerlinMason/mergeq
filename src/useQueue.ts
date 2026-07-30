@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { fetchChecks, fetchQueue, type Checks, type Entry, type Queue } from "./github.js";
+import {
+  fetchChecks,
+  fetchQueue,
+  QUEUE_PAGE,
+  type Checks,
+  type Entry,
+  type Queue,
+} from "./github.js";
 import { SetupError } from "./auth.js";
 
 export type Event = {
@@ -53,17 +60,17 @@ function diff(prev: Entry[], next: Entry[], viewer: string): Omit<Event, "id" | 
     }
   }
 
-  for (const entry of prev) {
-    if (after.has(entry.pullRequest.number)) continue;
-    const mine = entry.pullRequest.author?.login === viewer;
-    const merged = entry.position === 1;
-    events.push({
-      text: merged
-        ? `#${entry.pullRequest.number} merged`
-        : `#${entry.pullRequest.number} left the queue`,
-      tone: merged ? "good" : "bad",
-      mine,
-    });
+  // A truncated page cannot distinguish a departure from an entry pushed out of
+  // the window, and the queue never says why something left — RECENTLY does.
+  if (next.length < QUEUE_PAGE) {
+    for (const entry of prev) {
+      if (after.has(entry.pullRequest.number)) continue;
+      events.push({
+        text: `#${entry.pullRequest.number} left the queue`,
+        tone: "info",
+        mine: entry.pullRequest.author?.login === viewer,
+      });
+    }
   }
 
   return events;

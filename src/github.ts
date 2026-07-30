@@ -27,6 +27,8 @@ export type Queue = {
   viewer: string;
 };
 
+export const QUEUE_PAGE = 100;
+
 const QUERY = `
 query($owner:String!,$name:String!,$branch:String!){
   viewer{ login }
@@ -34,7 +36,7 @@ query($owner:String!,$name:String!,$branch:String!){
     mergeQueue(branch:$branch){
       url
       configuration{ maximumEntriesToBuild }
-      entries(first:50){
+      entries(first:${QUEUE_PAGE}){
         totalCount
         nodes{
           position
@@ -85,14 +87,22 @@ export function outcomeKey(outcome: Outcome): string {
   return `${outcome.number}-${outcome.at.getTime()}`;
 }
 
-class HttpError extends Error {
-  constructor(
-    readonly status: number,
-    readonly sso: boolean,
-    message: string,
-  ) {
-    super(message);
+function httpFailure(status: number, sso: boolean, statusText: string): Error {
+  if (status === 401) {
+    return new SetupError("GitHub rejected the token.", ["gh auth login", "gh auth status"]);
   }
+
+  if (status === 403) {
+    return sso
+      ? new SetupError("Token needs SSO authorisation for this organisation.", [
+          "Authorise it at https://github.com/settings/tokens",
+        ])
+      : new SetupError("GitHub returned 403 (rate limited, or missing scopes).", [
+          "gh auth refresh -h github.com -s repo",
+        ]);
+  }
+
+  return new Error(`GitHub returned ${status} ${statusText}`);
 }
 
 async function graphql<T>(
@@ -111,11 +121,7 @@ async function graphql<T>(
   });
 
   if (!res.ok) {
-    throw new HttpError(
-      res.status,
-      Boolean(res.headers.get("x-github-sso")),
-      `GitHub returned ${res.status} ${res.statusText}`,
-    );
+    throw httpFailure(res.status, Boolean(res.headers.get("x-github-sso")), res.statusText);
   }
 
   const body = (await res.json()) as { data?: T; errors?: { message: string }[] };
@@ -256,10 +262,14 @@ export async function fetchRate(opts: {
 
   if (times.length < 5) return null;
 
-  const spanMs = times[0]! - times[times.length - 1]!;
-  if (spanMs <= 0) return null;
+  const gaps: number[] = [];
+  for (let i = 1; i < times.length; i++) gaps.push(times[i - 1]! - times[i]!);
+  gaps.sort((a, b) => a - b);
 
-  return { gapMinutes: spanMs / 60000 / times.length };
+  const median = gaps[Math.floor(gaps.length / 2)]!;
+  if (median <= 0) return null;
+
+  return { gapMinutes: median / 60000 };
 }
 
 export async function fetchQueue(opts: {
@@ -268,29 +278,10 @@ export async function fetchQueue(opts: {
   name: string;
   branch: string;
 }): Promise<Queue> {
-  const data = await graphql<QueueData>(
-    opts.token,
-    QUERY,
-    { owner: opts.owner, name: opts.name, branch: opts.branch },
-  ).catch((caught: unknown) => {
-    if (!(caught instanceof HttpError)) throw caught;
-
-    if (caught.status === 401) {
-      throw new SetupError("GitHub rejected the token.", ["gh auth login", "gh auth status"]);
-    }
-
-    if (caught.status === 403) {
-      throw new SetupError(
-        caught.sso
-          ? "Token needs SSO authorisation for this organisation."
-          : "GitHub returned 403 (rate limited, or missing scopes).",
-        caught.sso
-          ? ["Authorise it at https://github.com/settings/tokens"]
-          : ["gh auth refresh -h github.com -s repo"],
-      );
-    }
-
-    throw caught;
+  const data = await graphql<QueueData>(opts.token, QUERY, {
+    owner: opts.owner,
+    name: opts.name,
+    branch: opts.branch,
   });
 
   const repo = data.repository;
