@@ -19,9 +19,11 @@ const HELP = `
                 current directory's repo)
     --branch    Queued branch (defaults to the repository's default branch)
     --interval  Seconds between polls (default 5)
+    --all       Start on the full queue rather than just your pull requests
+    --as        Follow someone else's pull requests instead of your own
 
   Keys
-    q  quit      r  refresh now      o  open the queue in a browser
+    q  quit    a  yours/all    r  refresh now    o  open in a browser
 
   Auth comes from the GitHub CLI. Run 'gh auth login' if you have not already.
 `;
@@ -67,7 +69,16 @@ async function main() {
   const branch = flag("branch") ?? (await resolveDefaultBranch(owner, name));
   const interval = Math.max(2, Number(flag("interval") ?? 5)) * 1000;
 
-  render(<App target={{ token, owner, name, branch }} interval={interval} />);
+  const as = flag("as");
+
+  render(
+    <App
+      target={{ token, owner, name, branch, as }}
+      interval={interval}
+      all={process.argv.includes("--all")}
+      as={as}
+    />,
+  );
 }
 
 main().catch(fail);

@@ -16,9 +16,39 @@ GitHub remote. Set a default with:
 export MERGEQ_REPO=incident-io/core
 ```
 
-Keys: `q` quit · `r` refresh now · `o` open the queue in a browser.
+Keys: `q` quit · `a` yours/all · `r` refresh now · `o` open in a browser.
 
-Flags: `--repo owner/name`, `--branch <name>`, `--interval <seconds>` (default 5).
+Flags: `--repo owner/name`, `--branch <name>`, `--interval <seconds>` (default
+5), `--all` to start on the full queue, `--as <login>` to follow someone else's
+pull requests.
+
+## What it shows
+
+The default view is only your pull requests. Everything ahead of them collapses
+into a `▸ n ahead` divider carrying the wait those entries represent, so the
+question "how long until mine lands" is answerable at a glance. Each of yours
+gets a check-progress bar, the check currently running, and an estimate.
+
+`RECENTLY` covers what happened after your pull requests left the queue —
+merged, or ejected with GitHub's reason (`failed checks`, `merge conflict`).
+macOS gets a desktop notification for each.
+
+## Where the estimate comes from
+
+GitHub's own `estimatedTimeToMerge` assumes roughly 1.7 minutes per position.
+Measured against the last 50 merges of incident-io/core, the queue actually
+merges one pull request every ~3.1 minutes, so that estimate runs about 1.8×
+optimistic.
+
+The estimate here is `position × observed gap`, where the gap comes from the
+timestamps of recent merges and so tracks the time of day. When that sample
+spans more than six hours the queue is too idle to extrapolate from, and the
+header marks the figure `(rough)`.
+
+## Polling
+
+Queue every 5s, your recent outcomes every 60s, merge rate every 5 minutes.
+Around 800 GraphQL points an hour against a 5,000 budget.
 
 ## Auth
 

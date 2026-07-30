@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { fetchQueue, type Entry, type Queue } from "./github.js";
+import { fetchChecks, fetchQueue, type Checks, type Entry, type Queue } from "./github.js";
 import { SetupError } from "./auth.js";
 
 export type Event = {
@@ -15,6 +15,7 @@ export type Target = {
   owner: string;
   name: string;
   branch: string;
+  as?: string;
 };
 
 function diff(prev: Entry[], next: Entry[], viewer: string): Omit<Event, "id" | "at">[] {
@@ -70,6 +71,7 @@ function diff(prev: Entry[], next: Entry[], viewer: string): Omit<Event, "id" | 
 
 export function useQueue(target: Target, intervalMs: number) {
   const [queue, setQueue] = useState<Queue | null>(null);
+  const [checks, setChecks] = useState<Map<string, Checks>>(new Map());
   const [events, setEvents] = useState<Event[]>([]);
   const [error, setError] = useState<Error | null>(null);
   const [fetching, setFetching] = useState(false);
@@ -96,6 +98,19 @@ export function useQueue(target: Target, intervalMs: number) {
             ].slice(0, 50),
           );
         }
+      }
+
+      const viewer = target.as ?? result.viewer;
+      const oids = result.entries
+        .filter((entry) => entry.pullRequest.author?.login === viewer)
+        .map((entry) => entry.headCommit?.oid)
+        .filter((oid): oid is string => Boolean(oid))
+        .slice(0, 6);
+
+      if (oids.length > 0) {
+        setChecks(await fetchChecks({ ...target, oids }).catch(() => new Map()));
+      } else {
+        setChecks(new Map());
       }
 
       previous.current = result.entries;
@@ -133,5 +148,5 @@ export function useQueue(target: Target, intervalMs: number) {
 
   const refresh = useCallback(() => setNonce((n) => n + 1), []);
 
-  return { queue, events, error, fetching, updatedAt, refresh };
+  return { queue, checks, events, error, fetching, updatedAt, refresh };
 }
