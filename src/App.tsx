@@ -509,7 +509,6 @@ export default function App({
   }
 
   const hints = `↑↓ pick · enter open · ${showAll ? "a mine" : "a all"} · n test · r refresh · q quit`;
-  const repoLabel = ` mergeq ${target.owner}/${target.name} → ${target.branch}`;
 
   return (
     <Box flexDirection="column" paddingX={1} paddingTop={1}>
@@ -521,11 +520,11 @@ export default function App({
           {" "}
           → {target.branch}
         </Text>
-        <Spacer />
-        <Text color="gray" dimColor>
-          {width >= hints.length + repoLabel.length + 6 ? hints : ""}
-        </Text>
       </Box>
+
+      <Text color="gray" dimColor wrap="truncate">
+        {hints}
+      </Text>
 
       <Panel title="QUEUE">
         <Box>
