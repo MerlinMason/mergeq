@@ -536,7 +536,6 @@ export default function App({
             {rate ? (
               <Text color="gray" dimColor>
                 {"   "}~{minutes(rate.gapMinutes)} between merges
-                {rate.spanHours > 6 ? " (rough)" : ""}
               </Text>
             ) : null}
           </Text>

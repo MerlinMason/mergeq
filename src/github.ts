@@ -78,7 +78,6 @@ export type Outcome = {
 
 export type Rate = {
   gapMinutes: number;
-  spanHours: number;
 };
 
 export const RECENT_LIMIT = 6;
@@ -255,10 +254,7 @@ export async function fetchRate(opts: {
   const spanMs = times[0]! - times[times.length - 1]!;
   if (spanMs <= 0) return null;
 
-  return {
-    gapMinutes: spanMs / 60000 / times.length,
-    spanHours: spanMs / 3600000,
-  };
+  return { gapMinutes: spanMs / 60000 / times.length };
 }
 
 export async function fetchQueue(opts: {

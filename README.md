@@ -64,9 +64,7 @@ merges one pull request every ~3.1 minutes, so that estimate runs about 1.8×
 optimistic.
 
 The estimate here is `position × observed gap`, where the gap comes from the
-timestamps of recent merges and so tracks the time of day. When that sample
-spans more than six hours the queue is too idle to extrapolate from, and the
-header marks the figure `(rough)`.
+timestamps of recent merges and so tracks the time of day.
 
 ## Polling
 
