@@ -557,9 +557,7 @@ export default function App({
           ) : null}
         </Box>
 
-        <Text color="gray" dimColor>
-          {"─".repeat(Math.max(10, width - PANEL_CHROME))}
-        </Text>
+        <Text color="gray">{"─".repeat(Math.max(10, width - PANEL_CHROME))}</Text>
 
         {showAll ? (
           entries.map((entry, index) => (
