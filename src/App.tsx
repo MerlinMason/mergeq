@@ -513,10 +513,8 @@ export default function App({
         </Text>
         <Spacer />
         <Text color="gray" dimColor>
-          {width >= hints.length + repoLabel.length + 8 ? hints : ""}
+          {width >= hints.length + repoLabel.length + 6 ? hints : ""}
         </Text>
-        <Text> </Text>
-        {fetching ? <Spinner color="cyan" /> : <Text> </Text>}
       </Box>
 
       <Gradient name={BRAND}>
@@ -549,12 +547,13 @@ export default function App({
             <Text color="gray">connecting…</Text>
           )}
           <Spacer />
-          {error ? <Text color="red">retrying…</Text> : null}
+          {error ? <Text color="red">retrying… </Text> : null}
           {!error && stale ? (
             <Text color="yellow" dimColor>
-              last update {ago(updatedAt!, now)} ago
+              last update {ago(updatedAt!, now)} ago{" "}
             </Text>
           ) : null}
+          {fetching ? <Spinner color="cyan" /> : <Text> </Text>}
         </Box>
 
         <Box marginY={1}>
