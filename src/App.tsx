@@ -35,7 +35,7 @@ const RECENT_LIMIT = 6;
 const STARTED_AT = Date.now();
 
 export const KEY_HINTS =
-  "↑↓ pick · ⏎  open PR · a toggle all/mine · o open queue · q quit";
+  "↑↓ pick · ⏎  open PR · a toggle all/yours · o open queue · q quit";
 
 function Spinner({ color }: { color: string }) {
   const { frame } = useAnimation({ interval: 80 });
@@ -60,7 +60,7 @@ function reasonOf(reason: string): { emoji: string; label: string } {
 }
 
 function busyness(depth: number): { emoji: string; label: string; color: string } {
-  if (depth === 0) return { emoji: "🧊", label: "chill", color: "cyan" };
+  if (depth <= 1) return { emoji: "🧊", label: "chill", color: "cyan" };
   if (depth <= 4) return { emoji: "🍳", label: "warming up", color: "green" };
   if (depth <= 9) return { emoji: "🌶️", label: "getting spicy", color: "yellow" };
   return { emoji: "🔥", label: "absolute carnage", color: "red" };
@@ -107,6 +107,9 @@ function etaLabel(entry: Entry, rate: Rate | null): string {
 
 const ETA_WIDTH = "🚀 in ~".length + 1 + "10h30m".length;
 
+// root paddingX (2) + panel border (2) + panel paddingX (2)
+const PANEL_CHROME = 6;
+
 const NOT_BUILDING = `${"─".repeat(24)} not building yet`;
 
 function PrLink({
@@ -133,23 +136,23 @@ function PrLink({
   );
 }
 
-const LONG_RULE = "─".repeat(400);
+const AHEAD_GUTTER = 4;
 
-function Ahead({ count, rate }: { count: number; rate: Rate | null }) {
+function Ahead({ count, rate, inner }: { count: number; rate: Rate | null; inner: number }) {
   const wait = rate ? rate.gapMinutes * count : null;
+  const label = `${count} ahead`;
+  const right = wait === null ? "" : `~${minutes(wait)}`;
+  const spent = AHEAD_GUTTER + label.length + 1 + (right ? right.length + 1 : 0);
 
   return (
     <Box>
-      <Box width={4} flexShrink={0}>
+      <Box width={AHEAD_GUTTER} flexShrink={0}>
         <Text dimColor>{"  ⋯"}</Text>
       </Box>
-      <Text dimColor>{count} ahead </Text>
-      <Box flexGrow={1} flexShrink={1} minWidth={0} marginRight={1}>
-        <Text dimColor wrap="truncate">
-          {LONG_RULE}
-        </Text>
-      </Box>
-      {wait === null ? null : <Text color="gray">~{minutes(wait)}</Text>}
+      <Text dimColor>
+        {label} {"─".repeat(Math.max(3, inner - spent))}
+      </Text>
+      {right ? <Text color="gray"> {right}</Text> : null}
     </Box>
   );
 }
@@ -264,10 +267,12 @@ function Recently({
   loading: boolean;
   now: number;
 }) {
+  const title = showAuthor ? "ALL RECENT" : "YOUR RECENT";
+
   if (outcomes.length === 0) {
     if (loading) {
       return (
-        <Panel title="RECENTLY">
+        <Panel title={title}>
           <Box>
             <Spinner color="cyan" />
             <Text dimColor> looking…</Text>
@@ -277,7 +282,7 @@ function Recently({
     }
     if (!error) return null;
     return (
-      <Panel title="RECENTLY">
+      <Panel title={title}>
         <Text color="red">✗ {error.message}</Text>
         {error instanceof SetupError && error.hint[0] ? (
           <Text dimColor>{error.hint[0]}</Text>
@@ -286,7 +291,7 @@ function Recently({
     );
   }
   return (
-    <Panel title="RECENTLY">
+    <Panel title={title}>
       {outcomes.map((outcome) => {
         const merged = outcome.kind === "merged";
         const reason = reasonOf(outcome.reason);
@@ -640,11 +645,7 @@ export default function App({
         </Box>
 
         <Box marginY={1}>
-          <Box flexGrow={1} minWidth={0}>
-            <Text color="gray" wrap="truncate">
-              {LONG_RULE}
-            </Text>
-          </Box>
+          <Text color="gray">{"─".repeat(Math.max(10, width - PANEL_CHROME))}</Text>
         </Box>
 
         {showAll ? (
@@ -670,7 +671,7 @@ export default function App({
         ) : mine.length > 0 ? (
           groups.map(({ ahead, entry }) => (
             <React.Fragment key={entry.pullRequest.number}>
-              {ahead > 0 ? <Ahead count={ahead} rate={rate} /> : null}
+              {ahead > 0 ? <Ahead count={ahead} rate={rate} inner={width - PANEL_CHROME} /> : null}
               <Mine
                 entry={entry}
                 checks={entry.headCommit ? checks.get(entry.headCommit.oid) : undefined}
