@@ -32,7 +32,7 @@ gets a check-progress bar, the check currently running, and an estimate.
 
 `RECENTLY` covers what happened after pull requests left the queue — yours, or
 everyone's when the full queue is showing — with an
-emoji per outcome — 🚀 shipped, 💥 failed, 🥊 conflict, ✋ yanked, 😭 for
+emoji per outcome — 🔀 shipped, 💥 failed, 🥊 conflict, ✋ yanked, 😭 for
 anything else. macOS gets a desktop notification for each.
 
 Move the selection with `↑`/`↓` (or `j`/`k`) and press `⏎` to open the

@@ -43,7 +43,7 @@ function Spinner({ color }: { color: string }) {
 }
 
 const REASONS: Record<string, { emoji: string; label: string }> = {
-  merged: { emoji: "🚀", label: "shipped" },
+  merged: { emoji: "🔀", label: "shipped" },
   failed_checks: { emoji: "💥", label: "failed" },
   merge_conflict: { emoji: "🥊", label: "conflict" },
   manual: { emoji: "✋", label: "yanked" },
@@ -102,10 +102,10 @@ function eta(position: number, rate: Rate | null, fallback: number | null): numb
 }
 
 function etaLabel(entry: Entry, rate: Rate | null): string {
-  return `🚀 in ~${minutes(eta(entry.position, rate, entry.estimatedTimeToMerge))}`;
+  return `🔀 in ~${minutes(eta(entry.position, rate, entry.estimatedTimeToMerge))}`;
 }
 
-const ETA_WIDTH = "🚀 in ~".length + 1 + "10h30m".length;
+const ETA_WIDTH = "🔀 in ~".length + 1 + "10h30m".length;
 
 // root paddingX (2) + panel border (2) + panel paddingX (2)
 const PANEL_CHROME = 6;
@@ -215,7 +215,7 @@ function Mine({
       <Box marginLeft={4}>
         {first ? (
           <Text color="green" bold>
-            🚀 you&apos;re up next{" "}
+            🔀 you&apos;re up next{" "}
           </Text>
         ) : null}
         {checks && checks.total > 0 ? (
@@ -517,7 +517,7 @@ export default function App({
 
       const reason = reasonOf(outcome.reason);
       if (outcome.kind === "merged") {
-        notify(`🚀 #${outcome.number} shipped`, outcome.title);
+        notify(`🔀 #${outcome.number} shipped`, outcome.title);
       } else {
         notify(
           `${reason.emoji} #${outcome.number} out of the queue`,
@@ -627,7 +627,7 @@ export default function App({
               <Text color={busy.color}>{busy.label}</Text>
               {rate ? (
                 <Text dimColor>
-                  {"   "}join now 🚀 in ~
+                  {"   "}join now 🔀 in ~
                   {minutes((queue.totalCount + 1) * rate.gapMinutes)}
                 </Text>
               ) : null}
