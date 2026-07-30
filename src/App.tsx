@@ -376,7 +376,7 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
       borderStyle="round"
       borderColor="gray"
       titles={[title]}
-      titleStyles={titleStyles.pill}
+      titleStyles={titleStyles.rectangle}
       flexDirection="column"
       paddingX={1}
       marginTop={1}
