@@ -571,7 +571,10 @@ export default function App({
         </Box>
 
         {showAll ? (
-          entries.map((entry, index) => (
+          queue && entries.length === 0 ? (
+            <Text color="white">🍺 nothing in the queue — everyone must be at the pub</Text>
+          ) : (
+            entries.map((entry, index) => (
             <React.Fragment key={entry.pullRequest.number}>
               {index === buildWindow && buildWindow > 0 ? (
                 <Text color="gray" dimColor>
@@ -585,7 +588,8 @@ export default function App({
                 now={now}
               />
             </React.Fragment>
-          ))
+            ))
+          )
         ) : mine.length > 0 ? (
           groups.map(({ ahead, entry }) => (
             <React.Fragment key={entry.pullRequest.number}>
