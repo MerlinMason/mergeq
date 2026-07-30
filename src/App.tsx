@@ -247,7 +247,7 @@ function Recently({
               </Text>
             </Box>
             <Box width={8} flexShrink={0}>
-              <Text color={merged ? "green" : "red"} bold={here} underline={here}>
+              <Text color="white" bold={here} underline={here}>
                 {link(`#${outcome.number}`, pullRequestUrl(repo.owner, repo.name, outcome.number))}
               </Text>
             </Box>
@@ -257,8 +257,9 @@ function Recently({
               </Text>
             </Box>
             <Box width={34} flexShrink={0} justifyContent="flex-end">
-              <Text color={merged ? "green" : "red"} wrap="truncate">
-                {reason.emoji} {reason.label} {ago(outcome.at, now)} ago
+              <Text color={merged ? "gray" : "red"} dimColor={merged} wrap="truncate">
+                {reason.emoji} {merged ? "" : `${reason.label} `}
+                {ago(outcome.at, now)} ago
               </Text>
               {outcome.queuedMinutes !== null ? (
                 <Text color="gray" dimColor>
@@ -365,7 +366,7 @@ const BRAND = "fruit";
 function Badge({ children }: { children?: string }) {
   return (
     <Gradient name={BRAND}>
-      <Text bold>mergeq{children ? ` │ ${children}` : ""}</Text>
+      <Text bold>🔥 mergeq{children ? ` │ ${children}` : ""}</Text>
     </Gradient>
   );
 }
