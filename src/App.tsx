@@ -5,6 +5,7 @@ import { useQueue, type Event, type Target } from "./useQueue.js";
 import { usePoll } from "./usePoll.js";
 import { notify } from "./notify.js";
 import { SetupError } from "./auth.js";
+import { link, pullRequestUrl } from "./link.js";
 import {
   fetchOutcomes,
   fetchRate,
@@ -25,12 +26,33 @@ const STATES: Record<EntryState, { glyph: string; color: string; label: string }
 
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
-function busyness(depth: number): { emoji: string; label: string; color: string } {
-  if (depth === 0) return { emoji: "🌙", label: "empty", color: "green" };
-  if (depth <= 4) return { emoji: "🍃", label: "quiet", color: "green" };
-  if (depth <= 9) return { emoji: "🚦", label: "steady", color: "yellow" };
-  return { emoji: "🔥", label: "busy", color: "red" };
+const REASONS: Record<string, { emoji: string; label: string }> = {
+  merged: { emoji: "🚀", label: "shipped" },
+  failed_checks: { emoji: "💥", label: "checks blew up" },
+  merge_conflict: { emoji: "🥊", label: "merge conflict" },
+  manual: { emoji: "✋", label: "yanked by hand" },
+  queue_cleared: { emoji: "🧹", label: "queue cleared" },
+  branch_protections: { emoji: "🚧", label: "branch protections" },
+  invalid_merge_commit: { emoji: "🫠", label: "bad merge commit" },
+};
+
+function reasonOf(reason: string): { emoji: string; label: string } {
+  return REASONS[reason.replace(/ /g, "_")] ?? { emoji: "😭", label: reason };
 }
+
+function busyness(depth: number): { emoji: string; label: string; color: string } {
+  if (depth === 0) return { emoji: "🌙", label: "dead quiet", color: "green" };
+  if (depth <= 4) return { emoji: "🍃", label: "ticking over", color: "green" };
+  if (depth <= 9) return { emoji: "🚦", label: "getting spicy", color: "yellow" };
+  return { emoji: "🔥", label: "absolute carnage", color: "red" };
+}
+
+const NOTHING_QUEUED = [
+  "✨ nothing of yours in the queue",
+  "🛌 nothing of yours in the queue — put your feet up",
+  "🌵 nothing of yours in the queue. quiet out here",
+  "🫧 nothing of yours in the queue",
+];
 
 function useWidth(): number {
   const { stdout } = useStdout();
@@ -69,10 +91,6 @@ function minutes(value: number | null): string {
   if (value < 60) return `${Math.round(value)}m`;
   const hours = Math.floor(value / 60);
   return `${hours}h${Math.round(value % 60)}m`;
-}
-
-function clock(at: Date): string {
-  return at.toTimeString().slice(0, 5);
 }
 
 function bar(done: number, total: number, width = 10): string {
@@ -124,6 +142,7 @@ export function Mine({
   rate,
   building,
   spinner,
+  repo,
   now,
 }: {
   entry: Entry;
@@ -131,6 +150,7 @@ export function Mine({
   rate: Rate | null;
   building: boolean;
   spinner: string;
+  repo: { owner: string; name: string };
   now: number;
 }) {
   const state = STATES[entry.state];
@@ -149,7 +169,10 @@ export function Mine({
         </Box>
         <Box width={8} flexShrink={0}>
           <Text color={accent} bold>
-            #{entry.pullRequest.number}
+            {link(
+              `#${entry.pullRequest.number}`,
+              pullRequestUrl(repo.owner, repo.name, entry.pullRequest.number),
+            )}
           </Text>
         </Box>
         <Box flexGrow={1} flexShrink={1} minWidth={0} marginRight={1}>
@@ -165,7 +188,7 @@ export function Mine({
       <Box marginLeft={3}>
         {first ? (
           <Text color="green" bold>
-            next to merge{" "}
+            🚀 you&apos;re up next{" "}
           </Text>
         ) : null}
         {checks && checks.total > 0 ? (
@@ -203,41 +226,50 @@ export function Mine({
   );
 }
 
-function Recently({ outcomes, now }: { outcomes: Outcome[]; now: number }) {
+function Recently({
+  outcomes,
+  repo,
+  now,
+}: {
+  outcomes: Outcome[];
+  repo: { owner: string; name: string };
+  now: number;
+}) {
   if (outcomes.length === 0) return null;
   return (
     <Box flexDirection="column">
       <Section title="RECENTLY" />
       {outcomes.slice(0, 6).map((outcome) => {
         const merged = outcome.kind === "merged";
+        const reason = reasonOf(merged ? "merged" : outcome.reason);
+        const took =
+          merged && outcome.queuedMinutes !== null
+            ? ` after ${minutes(outcome.queuedMinutes)}`
+            : "";
         return (
           <Box key={`${outcome.number}-${outcome.at.getTime()}`}>
             <Box width={3} flexShrink={0}>
-              <Text>{merged ? "✅" : "❌"}</Text>
-            </Box>
-            <Box width={6} flexShrink={0}>
-              <Text color="gray" dimColor>
-                {clock(outcome.at)}
-              </Text>
+              <Text>{reason.emoji}</Text>
             </Box>
             <Box width={8} flexShrink={0}>
-              <Text color={merged ? "green" : "red"}>#{outcome.number}</Text>
+              <Text color={merged ? "green" : "red"}>
+                {link(`#${outcome.number}`, pullRequestUrl(repo.owner, repo.name, outcome.number))}
+              </Text>
             </Box>
             <Box flexGrow={1} flexShrink={1} minWidth={0} marginRight={1}>
               <Text wrap="truncate" color="gray">
                 {outcome.title}
               </Text>
             </Box>
-            <Box width={20} flexShrink={0}>
+            <Box width={22} flexShrink={0}>
               <Text color={merged ? "green" : "red"} wrap="truncate">
-                {merged
-                  ? `merged${outcome.queuedMinutes !== null ? ` after ${minutes(outcome.queuedMinutes)}` : ""}`
-                  : outcome.reason}
+                {reason.label}
+                {took}
               </Text>
             </Box>
-            <Box width={5} flexShrink={0}>
+            <Box width={9} flexShrink={0}>
               <Text color="gray" dimColor>
-                {ago(outcome.at, now)}
+                {ago(outcome.at, now)} ago
               </Text>
             </Box>
           </Box>
@@ -260,9 +292,12 @@ function Empty({
 }) {
   const busy = busyness(depth);
   const lastMerge = outcomes.find((o) => o.kind === "merged");
+  const [greeting] = useState(
+    () => NOTHING_QUEUED[Math.floor(Math.random() * NOTHING_QUEUED.length)]!,
+  );
   return (
     <Box flexDirection="column" marginTop={1} marginLeft={3}>
-      <Text color="green">✨ nothing of yours in the queue</Text>
+      <Text color="green">{greeting}</Text>
       <Box marginTop={1}>
         <Text color="gray">
           {busy.emoji} the queue is <Text color={busy.color}>{busy.label}</Text>
@@ -275,14 +310,24 @@ function Empty({
       </Box>
       {lastMerge ? (
         <Text color="gray" dimColor>
-          your last merge was #{lastMerge.number}, {ago(lastMerge.at, now)} ago
+          you last shipped #{lastMerge.number} {ago(lastMerge.at, now)} ago 🚀
         </Text>
       ) : null}
     </Box>
   );
 }
 
-function AllRow({ entry, mine, now }: { entry: Entry; mine: boolean; now: number }) {
+function AllRow({
+  entry,
+  mine,
+  repo,
+  now,
+}: {
+  entry: Entry;
+  mine: boolean;
+  repo: { owner: string; name: string };
+  now: number;
+}) {
   const state = STATES[entry.state];
   const author = entry.pullRequest.author?.login ?? "unknown";
   return (
@@ -292,7 +337,10 @@ function AllRow({ entry, mine, now }: { entry: Entry; mine: boolean; now: number
       </Box>
       <Box width={7} marginRight={1} flexShrink={0}>
         <Text color={mine ? "cyan" : undefined} bold={mine}>
-          #{entry.pullRequest.number}
+          {link(
+            `#${entry.pullRequest.number}`,
+            pullRequestUrl(repo.owner, repo.name, entry.pullRequest.number),
+          )}
         </Text>
       </Box>
       <Box width={10} marginRight={1} flexShrink={0}>
@@ -317,7 +365,7 @@ function AllRow({ entry, mine, now }: { entry: Entry; mine: boolean; now: number
   );
 }
 
-function Events({ events }: { events: Event[] }) {
+function Events({ events, now }: { events: Event[]; now: number }) {
   if (events.length === 0) return null;
   return (
     <Box flexDirection="column">
@@ -325,7 +373,7 @@ function Events({ events }: { events: Event[] }) {
       {events.slice(0, 3).map((event) => (
         <Box key={event.id} marginLeft={3}>
           <Text color="gray" dimColor>
-            {clock(event.at)}{" "}
+            {ago(event.at, now)} ago{" "}
           </Text>
           <Text
             color={event.tone === "good" ? "green" : event.tone === "bad" ? "red" : "white"}
@@ -387,15 +435,16 @@ export default function App({
       if (seen.current.has(key)) continue;
       seen.current.add(key);
       if (outcome.kind === "merged") {
-        notify(`#${outcome.number} merged 🎉`, outcome.title);
+        notify(`🚀 #${outcome.number} shipped`, outcome.title);
       } else {
-        notify(`#${outcome.number} kicked out of the queue`, `${outcome.reason} — ${outcome.title}`);
+        const reason = reasonOf(outcome.reason);
+        notify(`${reason.emoji} #${outcome.number} out of the queue`, `${reason.label} — ${outcome.title}`);
       }
     }
   }, [outcomes]);
 
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
+    const id = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(id);
   }, []);
 
@@ -427,6 +476,8 @@ export default function App({
     );
   }
 
+  const repo = { owner: target.owner, name: target.name };
+  const stale = updatedAt !== null && now - updatedAt.getTime() > 30_000;
   const entries = queue?.entries ?? [];
   const mine = entries.filter((entry) => entry.pullRequest.author?.login === viewer);
   const buildWindow = queue?.maximumEntriesToBuild ?? 0;
@@ -476,10 +527,10 @@ export default function App({
           <Text color="gray">connecting…</Text>
         )}
         <Box flexGrow={1} />
-        {error ? <Text color="red">retrying · </Text> : null}
-        {updatedAt ? (
-          <Text color="gray" dimColor>
-            {ago(updatedAt, now)} ago
+        {error ? <Text color="red">retrying…</Text> : null}
+        {!error && stale ? (
+          <Text color="yellow" dimColor>
+            last update {ago(updatedAt!, now)} ago
           </Text>
         ) : null}
       </Box>
@@ -496,6 +547,7 @@ export default function App({
               <AllRow
                 entry={entry}
                 mine={entry.pullRequest.author?.login === viewer}
+                repo={repo}
                 now={now}
               />
             </React.Fragment>
@@ -515,6 +567,7 @@ export default function App({
                     rate={rate}
                     building={entry.position <= buildWindow}
                     spinner={spinner}
+                    repo={repo}
                     now={now}
                   />
                 </React.Fragment>
@@ -524,8 +577,8 @@ export default function App({
             <Empty depth={queue.totalCount} rate={rate} outcomes={outcomes} now={now} />
           ) : null}
 
-          <Recently outcomes={outcomes} now={now} />
-          {mine.length > 0 ? <Events events={events} /> : null}
+          <Recently outcomes={outcomes} repo={repo} now={now} />
+          {mine.length > 0 ? <Events events={events} now={now} /> : null}
         </>
       )}
     </Box>

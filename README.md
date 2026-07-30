@@ -29,9 +29,16 @@ into a `▸ n ahead` divider carrying the wait those entries represent, so the
 question "how long until mine lands" is answerable at a glance. Each of yours
 gets a check-progress bar, the check currently running, and an estimate.
 
-`RECENTLY` covers what happened after your pull requests left the queue —
-merged, or ejected with GitHub's reason (`failed checks`, `merge conflict`).
-macOS gets a desktop notification for each.
+`RECENTLY` covers what happened after your pull requests left the queue, with an
+emoji per outcome — 🚀 shipped, 💥 checks blew up, 🥊 merge conflict, ✋ yanked
+by hand, 😭 for anything else. macOS gets a desktop notification for each.
+
+Pull request numbers are OSC 8 hyperlinks, so ⌘-click opens them on GitHub in
+any terminal that supports the escape (iTerm2, Ghostty, WezTerm, Kitty, and
+Terminal.app). Elsewhere they render as plain text.
+
+Times are relative throughout, and nothing counts up second by second — the
+display only refreshes twice a minute. If polling stalls the header says so.
 
 ## Where the estimate comes from
 
