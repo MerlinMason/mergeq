@@ -228,11 +228,13 @@ function Recently({
   outcomes,
   repo,
   selected,
+  showAuthor,
   now,
 }: {
   outcomes: Outcome[];
   repo: { owner: string; name: string };
   selected: Outcome | null;
+  showAuthor: boolean;
   now: number;
 }) {
   if (outcomes.length === 0) return null;
@@ -259,6 +261,13 @@ function Recently({
                 {outcome.title}
               </Text>
             </Box>
+            {showAuthor ? (
+              <Box width={14} marginRight={2} flexShrink={0}>
+                <Text color="gray" dimColor wrap="truncate">
+                  {outcome.author}
+                </Text>
+              </Box>
+            ) : null}
             <Box width={STATUS_WIDTH} flexShrink={0}>
               <Text color={merged ? "gray" : "red"} dimColor={merged} wrap="truncate">
                 {reason.emoji} {merged ? "" : `${reason.label} `}
@@ -411,8 +420,8 @@ export default function App({
   const [selection, setSelection] = useState(0);
 
   const loadOutcomes = useCallback(
-    () => fetchOutcomes({ ...target, login: viewer }),
-    [target, viewer],
+    () => fetchOutcomes({ ...target, login: showAll ? undefined : viewer }),
+    [target, viewer, showAll],
   );
   const loadRate = useCallback(() => fetchRate(target), [target]);
 
@@ -433,6 +442,7 @@ export default function App({
       const key = outcomeKey(outcome);
       if (seen.current.has(key)) continue;
       seen.current.add(key);
+      if (outcome.author !== viewer) continue;
 
       const reason = reasonOf(outcome.reason);
       if (outcome.kind === "merged") {
@@ -444,7 +454,7 @@ export default function App({
         );
       }
     }
-  }, [outcomes]);
+  }, [outcomes, viewer]);
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 30_000);
@@ -503,7 +513,7 @@ export default function App({
     walked = entry.position;
   }
 
-  const hints = `↑↓ pick · ⏎ open · ${showAll ? "a mine" : "a all"} · o queue · q quit`;
+  const hints = `↑↓ pick · ⏎ open · ${showAll ? "a mine" : "a all"} · o open queue · q quit`;
 
   return (
     <Box flexDirection="column" paddingX={1} paddingTop={1}>
@@ -598,12 +608,14 @@ export default function App({
         ) : null}
       </Panel>
 
-      {showAll ? null : (
-        <>
-          <Recently outcomes={outcomes} repo={target} selected={selectedOutcome} now={now} />
-          {mine.length > 0 ? <Events events={events} now={now} /> : null}
-        </>
-      )}
+      <Recently
+        outcomes={outcomes}
+        repo={target}
+        selected={selectedOutcome}
+        showAuthor={showAll}
+        now={now}
+      />
+      {!showAll && mine.length > 0 ? <Events events={events} now={now} /> : null}
     </Box>
   );
 }

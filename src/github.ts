@@ -71,6 +71,7 @@ export type Checks = {
 export type Outcome = {
   number: number;
   title: string;
+  author: string;
   kind: "merged" | "ejected";
   reason: string;
   at: Date;
@@ -197,22 +198,29 @@ export async function fetchOutcomes(opts: {
   token: string;
   owner: string;
   name: string;
-  login: string;
+  login?: string;
 }): Promise<Outcome[]> {
   type Node = {
     number: number;
     title: string;
+    author: { login: string } | null;
     removed: { nodes: { createdAt: string; reason: string | null }[] };
   };
 
   const data = await graphql<{ search: { nodes: Node[] } }>(
     opts.token,
     `query($q:String!){ search(query:$q, type:ISSUE, first:15){ nodes{ ... on PullRequest {
-      number title
+      number title author{ login }
       removed: timelineItems(last:3, itemTypes:[REMOVED_FROM_MERGE_QUEUE_EVENT]){ nodes{ ... on RemovedFromMergeQueueEvent { createdAt reason } } }
     }}}}`,
     {
-      q: `repo:${opts.owner}/${opts.name} author:${opts.login} is:pr sort:updated-desc`,
+      q: [
+        `repo:${opts.owner}/${opts.name}`,
+        opts.login ? `author:${opts.login}` : "",
+        "is:pr sort:updated-desc",
+      ]
+        .filter(Boolean)
+        .join(" "),
     },
   );
 
@@ -223,6 +231,7 @@ export async function fetchOutcomes(opts: {
       outcomes.push({
         number: node.number,
         title: node.title,
+        author: node.author?.login ?? "unknown",
         kind: removal.reason === "merged" ? "merged" : "ejected",
         reason: removal.reason ?? "removed",
         at: new Date(removal.createdAt),

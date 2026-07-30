@@ -30,7 +30,8 @@ into a `▸ n ahead` divider carrying the wait those entries represent, so the
 question "how long until mine lands" is answerable at a glance. Each of yours
 gets a check-progress bar, the check currently running, and an estimate.
 
-`RECENTLY` covers what happened after your pull requests left the queue, with an
+`RECENTLY` covers what happened after pull requests left the queue — yours, or
+everyone's when the full queue is showing — with an
 emoji per outcome — 🚀 shipped, 💥 failed, 🥊 conflict, ✋ yanked, 😭 for
 anything else. macOS gets a desktop notification for each.
 
