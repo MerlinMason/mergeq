@@ -61,9 +61,9 @@ function busyness(depth: number): { emoji: string; label: string; color: string 
 }
 
 const NOTHING_QUEUED = [
-  "💅 nothing of yours in the queue — yassify something",
-  "✨ nothing of yours in the queue — make something magic",
-  "👑 nothing of yours in the queue — crank up the slay",
+  "nothing of yours in the queue — yassify something 💅",
+  "nothing of yours in the queue — make something magic ✨",
+  "nothing of yours in the queue — crank up the slay 👑",
 ];
 
 function ago(from: Date, now: number): string {
@@ -588,7 +588,7 @@ export default function App({
 
         {showAll ? (
           queue && entries.length === 0 ? (
-            <Text>🍺 nothing in the queue — everyone must be at the pub</Text>
+            <Text>nothing in the queue — everyone must be at the pub 🍺</Text>
           ) : (
             entries.map((entry, index) => (
             <React.Fragment key={entry.pullRequest.number}>
