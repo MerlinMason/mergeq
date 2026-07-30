@@ -48,10 +48,10 @@ function busyness(depth: number): { emoji: string; label: string; color: string 
 }
 
 const NOTHING_QUEUED = [
-  "✨ nothing of yours in the queue",
-  "🛌 nothing of yours in the queue — put your feet up",
-  "🌵 nothing of yours in the queue. quiet out here",
-  "🫧 nothing of yours in the queue",
+  "🫵 nothing of yours in the queue — get to work",
+  "📭 nothing of yours in the queue — ship something",
+  "🔨 nothing of yours in the queue — back to the mines",
+  "🐌 nothing of yours in the queue — the queue misses you",
 ];
 
 function useWidth(): number {
