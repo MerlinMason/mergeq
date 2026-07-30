@@ -375,14 +375,9 @@ const WORDMARK = ["┌┬┐┌─╴┌─┐┌─╴┌─╴┌─┐", "│
 
 function Wordmark() {
   return (
-    <Box>
-      <Box width={4} height={3} alignItems="center" flexShrink={0}>
-        <Text>🔥</Text>
-      </Box>
-      <Gradient name={BRAND}>
-        <Text>{WORDMARK}</Text>
-      </Gradient>
-    </Box>
+    <Gradient name={BRAND}>
+      <Text>{WORDMARK}</Text>
+    </Gradient>
   );
 }
 
@@ -394,10 +389,10 @@ function Rule({ width }: { width: number }) {
   );
 }
 
-function Badge({ children }: { children?: string }) {
+function Badge() {
   return (
     <Gradient name={BRAND}>
-      <Text bold>🔥 mergeq{children ? ` │ ${children}` : ""}</Text>
+      <Text bold>mergeq</Text>
     </Gradient>
   );
 }
