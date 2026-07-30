@@ -613,6 +613,22 @@ export default function App({
             selected={cursor - mine.length}
             now={now}
           />
+          {cursor >= 0 ? (
+            <Box marginTop={1}>
+              <Box width={4} flexShrink={0}>
+                <Text color="cyan" bold>
+                  ▸
+                </Text>
+              </Box>
+              <Text color="cyan" wrap="truncate">
+                {pullRequestUrl(repo.owner, repo.name, selectable[cursor]!)}
+              </Text>
+              <Box flexGrow={1} />
+              <Text color="gray" dimColor>
+                ⏎ opens it
+              </Text>
+            </Box>
+          ) : null}
           {mine.length > 0 ? <Events events={events} now={now} /> : null}
         </>
       )}

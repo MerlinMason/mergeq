@@ -37,8 +37,12 @@ Move the selection with `↑`/`↓` (or `j`/`k`) and press `⏎` to open the
 highlighted pull request on GitHub. That works everywhere.
 
 Pull request numbers are also OSC 8 hyperlinks, so ⌘-click opens them directly
-in iTerm2, Ghostty, WezTerm, Kitty and Terminal.app. Warp does not implement
-OSC 8, so the numbers render as plain text there and `⏎` is the way in.
+in iTerm2, Ghostty, WezTerm, Kitty and Terminal.app.
+
+Warp does not implement OSC 8, so those numbers are inert there. The footer
+prints the selected pull request's URL in full for exactly that reason — Warp
+linkifies bare URLs, so it is ⌘-clickable even though the numbers above are
+not.
 
 Times are relative throughout, and nothing counts up second by second — the
 display only refreshes twice a minute. If polling stalls the header says so.
