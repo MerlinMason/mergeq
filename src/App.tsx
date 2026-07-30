@@ -360,10 +360,12 @@ function Events({ events, now }: { events: Event[]; now: number }) {
   );
 }
 
-function Badge() {
+const BRAND = "fruit";
+
+function Badge({ children }: { children?: string }) {
   return (
-    <Gradient colors={["#22d3ee", "#a855f7"]}>
-      <Text bold>mergeq</Text>
+    <Gradient name={BRAND}>
+      <Text bold>mergeq{children ? ` │ ${children}` : ""}</Text>
     </Gradient>
   );
 }
@@ -504,19 +506,18 @@ export default function App({
   return (
     <Box flexDirection="column" paddingX={1}>
       <Box>
-        <Badge />
-        <Text> </Text>
-        <Text bold>
-          {target.owner}/{target.name}
+        <Badge>{`${target.owner}/${target.name}`}</Badge>
+        <Text color="gray" dimColor>
+          {" "}
+          → {target.branch}
         </Text>
-        <Text color="gray"> → {target.branch}</Text>
         <Spacer />
         <Text color="gray" dimColor>
           {width >= hints.length + repoLabel.length + 6 ? hints : ""}
         </Text>
       </Box>
 
-      <Gradient colors={["#22d3ee", "#a855f7"]}>
+      <Gradient name={BRAND}>
         <Text dimColor>{"─".repeat(Math.max(10, width - 2))}</Text>
       </Gradient>
 
