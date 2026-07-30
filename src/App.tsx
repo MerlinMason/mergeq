@@ -541,9 +541,11 @@ export default function App({
         </Text>
       </Box>
 
-      <Text color="gray" dimColor wrap="truncate">
-        {hints}
-      </Text>
+      <Box marginBottom={1}>
+        <Text color="gray" dimColor wrap="truncate">
+          {hints}
+        </Text>
+      </Box>
 
       <Panel title="QUEUE">
         <Box>
