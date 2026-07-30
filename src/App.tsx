@@ -38,13 +38,16 @@ function Spinner({ color }: { color: string }) {
 
 const REASONS: Record<string, { emoji: string; label: string }> = {
   merged: { emoji: "🚀", label: "shipped" },
-  failed_checks: { emoji: "💥", label: "checks blew up" },
-  merge_conflict: { emoji: "🥊", label: "merge conflict" },
-  manual: { emoji: "✋", label: "yanked by hand" },
-  queue_cleared: { emoji: "🧹", label: "queue cleared" },
-  branch_protections: { emoji: "🚧", label: "branch protections" },
-  invalid_merge_commit: { emoji: "🫠", label: "bad merge commit" },
+  failed_checks: { emoji: "💥", label: "failed" },
+  merge_conflict: { emoji: "🥊", label: "conflict" },
+  manual: { emoji: "✋", label: "yanked" },
+  queue_cleared: { emoji: "🧹", label: "cleared" },
+  branch_protections: { emoji: "🚧", label: "blocked" },
+  invalid_merge_commit: { emoji: "🫠", label: "bad commit" },
 };
+
+const STATUS_WIDTH =
+  2 + 1 + Math.max(...Object.values(REASONS).map((r) => r.label.length)) + " 10h ago".length;
 
 function reasonOf(reason: string): { emoji: string; label: string } {
   return REASONS[reason] ?? { emoji: "😭", label: reason.replace(/_/g, " ") };
@@ -256,7 +259,7 @@ function Recently({
                 {outcome.title}
               </Text>
             </Box>
-            <Box width={26} flexShrink={0} justifyContent="flex-end">
+            <Box width={STATUS_WIDTH} flexShrink={0}>
               <Text color={merged ? "gray" : "red"} dimColor={merged} wrap="truncate">
                 {reason.emoji} {merged ? "" : `${reason.label} `}
                 {ago(outcome.at, now)} ago

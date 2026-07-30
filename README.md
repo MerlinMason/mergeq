@@ -30,8 +30,8 @@ question "how long until mine lands" is answerable at a glance. Each of yours
 gets a check-progress bar, the check currently running, and an estimate.
 
 `RECENTLY` covers what happened after your pull requests left the queue, with an
-emoji per outcome — 🚀 shipped, 💥 checks blew up, 🥊 merge conflict, ✋ yanked
-by hand, 😭 for anything else. macOS gets a desktop notification for each.
+emoji per outcome — 🚀 shipped, 💥 failed, 🥊 conflict, ✋ yanked, 😭 for
+anything else. macOS gets a desktop notification for each.
 
 Move the selection with `↑`/`↓` (or `j`/`k`) and press `⏎` to open the
 highlighted pull request on GitHub. Pull request numbers are also OSC 8
