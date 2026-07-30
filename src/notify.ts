@@ -1,7 +1,7 @@
 import { execFile, execFileSync } from "node:child_process";
 import { BEL, ESC } from "./link.js";
 
-export type Method = "escape" | "terminal-notifier" | "osascript" | "none";
+type Send = (title: string, body: string) => void;
 
 const OSC_777_TERMINALS = new Set(["WarpTerminal", "WezTerm", "ghostty"]);
 
@@ -12,7 +12,7 @@ function supportsEscapeNotifications(): boolean {
   return (process.env.TERM ?? "").startsWith("foot");
 }
 
-function resolveNotifier(): string | null {
+function terminalNotifier(): string | null {
   if (process.platform !== "darwin") return null;
   try {
     return execFileSync("which", ["terminal-notifier"], { encoding: "utf8" }).trim() || null;
@@ -21,46 +21,33 @@ function resolveNotifier(): string | null {
   }
 }
 
-const CHANNELS: Record<Exclude<Method, "none">, (title: string, body: string) => void> = {
-  escape(title, body) {
+function resolve(): Send {
+  if (supportsEscapeNotifications()) {
     const clean = (value: string) => value.replace(/[;\r\n]/g, " ").trim();
-    process.stdout.write(`${ESC}]777;notify;${clean(title)};${clean(body)}${BEL}`);
-  },
-  "terminal-notifier"(title, body) {
-    execFile(notifier!, ["-title", title, "-message", body, "-sound", "Ping"]);
-  },
-  osascript(title, body) {
-    const clean = (value: string) => value.replace(/["\\]/g, "\\$&");
+    return (title, body) =>
+      process.stdout.write(`${ESC}]777;notify;${clean(title)};${clean(body)}${BEL}`);
+  }
+
+  const notifier = terminalNotifier();
+  if (notifier) {
+    return (title, body) =>
+      execFile(notifier, ["-title", title, "-message", body, "-sound", "Ping"]);
+  }
+
+  if (process.platform !== "darwin") return () => {};
+
+  const clean = (value: string) => value.replace(/["\\]/g, "\\$&");
+  return (title, body) =>
     execFile("osascript", [
       "-e",
       `display notification "${clean(body)}" with title "${clean(title)}" sound name "Ping"`,
     ]);
-  },
-};
-
-let notifier: string | null = null;
-let resolved: Method | null = null;
-
-function method(): Method {
-  if (resolved) return resolved;
-
-  if (supportsEscapeNotifications()) {
-    resolved = "escape";
-  } else {
-    notifier = resolveNotifier();
-    resolved = notifier
-      ? "terminal-notifier"
-      : process.platform === "darwin"
-        ? "osascript"
-        : "none";
-  }
-
-  return resolved;
 }
+
+let send: Send | null = null;
 
 export function notify(title: string, body: string): void {
   if (process.env.MERGEQ_NOTIFY === "off") return;
-  const channel = method();
-  if (channel === "none") return;
-  CHANNELS[channel](title, body);
+  send ??= resolve();
+  send(title, body);
 }

@@ -11,7 +11,6 @@ import {
   fetchOutcomes,
   fetchRate,
   outcomeKey,
-  RECENT_LIMIT,
   type Checks,
   type Entry,
   type EntryState,
@@ -30,6 +29,11 @@ const STATES: Record<EntryState, { glyph: string; color: string; label: string }
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 const NO_OUTCOMES: Outcome[] = [];
+
+const RECENT_LIMIT = 6;
+
+export const KEY_HINTS =
+  "↑↓ pick · ⏎  open PR · a toggle all/mine · o open queue · q quit";
 
 function Spinner({ color }: { color: string }) {
   const { frame } = useAnimation({ interval: 80 });
@@ -95,31 +99,55 @@ function eta(position: number, rate: Rate | null, fallback: number | null): numb
   return fallback === null ? null : fallback / 60;
 }
 
-function Ahead({
-  count,
-  rate,
+function etaLabel(entry: Entry, rate: Rate | null): string {
+  return `🚀 in ~${minutes(eta(entry.position, rate, entry.estimatedTimeToMerge))}`;
+}
+
+const ETA_WIDTH = "🚀 in ~".length + 1 + "10h30m".length;
+
+const NOT_BUILDING = `${"─".repeat(24)} not building yet`;
+
+function PrLink({
+  repo,
+  number,
   width,
+  color,
+  bold,
+  underline,
 }: {
-  count: number;
-  rate: Rate | null;
+  repo: { owner: string; name: string };
+  number: number;
   width: number;
+  color?: string;
+  bold?: boolean;
+  underline?: boolean;
 }) {
+  return (
+    <Box width={width} flexShrink={0}>
+      <Text color={color} bold={bold} underline={underline}>
+        {link(`#${number}`, pullRequestUrl(repo.owner, repo.name, number))}
+      </Text>
+    </Box>
+  );
+}
+
+const LONG_RULE = "─".repeat(400);
+
+function Ahead({ count, rate }: { count: number; rate: Rate | null }) {
   const wait = rate ? rate.gapMinutes * count : null;
-  const label = `${count} ahead`;
-  const right = wait === null ? "" : `~${minutes(wait)}`;
-  const rule = "─".repeat(Math.max(3, width - 2 - 4 - label.length - right.length - 3));
 
   return (
     <Box>
       <Box width={4} flexShrink={0}>
-        <Text dimColor>
-          {"  ⋯"}
+        <Text dimColor>{"  ⋯"}</Text>
+      </Box>
+      <Text dimColor>{count} ahead </Text>
+      <Box flexGrow={1} flexShrink={1} minWidth={0} marginRight={1}>
+        <Text dimColor wrap="truncate">
+          {LONG_RULE}
         </Text>
       </Box>
-      <Text dimColor>
-        {label} {rule}
-      </Text>
-      {right ? <Text color="gray"> {right}</Text> : null}
+      {wait === null ? null : <Text color="gray">~{minutes(wait)}</Text>}
     </Box>
   );
 }
@@ -141,7 +169,6 @@ function Mine({
 }) {
   const state = STATES[entry.state];
   const first = entry.position === 1;
-  const estimate = eta(entry.position, rate, entry.estimatedTimeToMerge);
 
   const accent = first ? "green" : building ? "cyan" : undefined;
 
@@ -162,14 +189,14 @@ function Mine({
             <Text color={state.color}>{state.glyph}</Text>
           )}
         </Box>
-        <Box width={8} flexShrink={0}>
-          <Text color={accent} bold underline={here}>
-            {link(
-              `#${entry.pullRequest.number}`,
-              pullRequestUrl(repo.owner, repo.name, entry.pullRequest.number),
-            )}
-          </Text>
-        </Box>
+        <PrLink
+          repo={repo}
+          number={entry.pullRequest.number}
+          width={8}
+          color={accent}
+          bold
+          underline={here}
+        />
         <Box flexGrow={1} flexShrink={1} minWidth={0} marginRight={1}>
           <Text bold={first} color={first ? "green" : undefined} wrap="truncate">
             {entry.pullRequest.title}
@@ -212,7 +239,7 @@ function Mine({
           <Text color="gray">{state.label}</Text>
         )}
         <Spacer />
-        <Text color={first ? "green" : "cyan"}>🚀 in ~{minutes(estimate)}</Text>
+        <Text color={first ? "green" : "cyan"}>{etaLabel(entry, rate)}</Text>
       </Box>
     </Box>
   );
@@ -245,11 +272,13 @@ function Recently({
                 {here ? "▸" : " "}
               </Text>
             </Box>
-            <Box width={8} flexShrink={0}>
-              <Text bold={here} underline={here}>
-                {link(`#${outcome.number}`, pullRequestUrl(repo.owner, repo.name, outcome.number))}
-              </Text>
-            </Box>
+            <PrLink
+              repo={repo}
+              number={outcome.number}
+              width={8}
+              bold={here}
+              underline={here}
+            />
             <Box flexGrow={1} flexShrink={1} minWidth={0} marginRight={2}>
               <Text wrap="truncate" bold={here} dimColor={!here}>
                 {outcome.title}
@@ -310,13 +339,14 @@ function AllRow({
       <Box width={3} marginRight={1} flexShrink={0}>
         <Text color={mine ? "cyan" : "gray"}>{String(entry.position).padStart(2)}</Text>
       </Box>
-      <Box width={7} marginRight={1} flexShrink={0}>
-        <Text color={mine ? "cyan" : undefined} bold={mine}>
-          {link(
-            `#${entry.pullRequest.number}`,
-            pullRequestUrl(repo.owner, repo.name, entry.pullRequest.number),
-          )}
-        </Text>
+      <Box marginRight={1} flexShrink={0}>
+        <PrLink
+          repo={repo}
+          number={entry.pullRequest.number}
+          width={7}
+          color={mine ? "cyan" : undefined}
+          bold={mine}
+        />
       </Box>
       <Box width={10} marginRight={1} flexShrink={0}>
         <Text color={state.color} wrap="truncate">
@@ -333,9 +363,9 @@ function AllRow({
           {author}
         </Text>
       </Box>
-      <Box width={11} flexShrink={0}>
-        <Text dimColor>
-          🚀 in ~{minutes(eta(entry.position, rate, entry.estimatedTimeToMerge))}
+      <Box width={ETA_WIDTH} flexShrink={0}>
+        <Text dimColor wrap="truncate">
+          {etaLabel(entry, rate)}
         </Text>
       </Box>
     </Box>
@@ -365,33 +395,31 @@ function Events({ events, now }: { events: Event[]; now: number }) {
 
 const BRAND = "fruit";
 
-const PANEL_CHROME = 6;
-
 const WORDMARK = ["┌┬┐┌─╴┌─┐┌─╴┌─╴┌─┐", "│││├╴ ├┬┘│╶┐├╴ │┐│", "╵ ╵└─╴╵└╴└─┘└─╴└┴┘"].join("\n");
 
-function Wordmark() {
+const Wordmark = React.memo(function Wordmark() {
   return (
     <Gradient name={BRAND}>
       <Text>{WORDMARK}</Text>
     </Gradient>
   );
-}
+});
 
-function Rule({ width }: { width: number }) {
+const Rule = React.memo(function Rule({ width }: { width: number }) {
   return (
     <Gradient name={BRAND}>
       <Text dimColor>{"─".repeat(Math.max(10, width - 2))}</Text>
     </Gradient>
   );
-}
+});
 
-function Badge() {
+const Badge = React.memo(function Badge() {
   return (
     <Gradient name={BRAND}>
       <Text bold>mergeq</Text>
     </Gradient>
   );
-}
+});
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -473,9 +501,10 @@ export default function App({
   const buildWindow = queue?.maximumEntriesToBuild ?? 0;
   const busy = busyness(queue?.totalCount ?? 0);
 
+  const recent = outcomes.slice(0, RECENT_LIMIT);
   const selectable: { number: number; outcome: Outcome | null }[] = [
     ...mine.map((entry) => ({ number: entry.pullRequest.number, outcome: null })),
-    ...outcomes.map((outcome) => ({ number: outcome.number, outcome })),
+    ...recent.map((outcome) => ({ number: outcome.number, outcome })),
   ];
   const selected =
     selectable.length === 0
@@ -487,7 +516,8 @@ export default function App({
   useInput((input, key) => {
     if (input === "q" || key.escape || (key.ctrl && input === "c")) exit();
     if (input === "a") setShowAll((value) => !value);
-    if (input === "j" || key.downArrow) setSelection((value) => value + 1);
+    if (input === "j" || key.downArrow)
+      setSelection((value) => Math.min(value + 1, Math.max(0, selectable.length - 1)));
     if (input === "k" || key.upArrow) setSelection((value) => Math.max(0, value - 1));
     if (key.return && selected) openUrl(pullRequestUrl(target.owner, target.name, selected.number));
     if (input === "o" && queue) openUrl(queue.url);
@@ -519,7 +549,6 @@ export default function App({
     walked = entry.position;
   }
 
-  const hints = "↑↓ pick · ⏎  open PR · a toggle all/mine · o open queue · q quit";
 
   return (
     <Box flexDirection="column" paddingX={1} paddingTop={1}>
@@ -539,7 +568,7 @@ export default function App({
 
       <Box marginBottom={1}>
         <Text dimColor wrap="truncate">
-          {hints}
+          {KEY_HINTS}
         </Text>
       </Box>
 
@@ -579,7 +608,11 @@ export default function App({
         </Box>
 
         <Box marginY={1}>
-          <Text color="gray">{"─".repeat(Math.max(10, width - PANEL_CHROME))}</Text>
+          <Box flexGrow={1} minWidth={0}>
+            <Text color="gray" wrap="truncate">
+              {LONG_RULE}
+            </Text>
+          </Box>
         </Box>
 
         {showAll ? (
@@ -605,9 +638,7 @@ export default function App({
         ) : mine.length > 0 ? (
           groups.map(({ ahead, entry }) => (
             <React.Fragment key={entry.pullRequest.number}>
-              {ahead > 0 ? (
-                <Ahead count={ahead} rate={rate} width={width - PANEL_CHROME + 2} />
-              ) : null}
+              {ahead > 0 ? <Ahead count={ahead} rate={rate} /> : null}
               <Mine
                 entry={entry}
                 checks={entry.headCommit ? checks.get(entry.headCommit.oid) : undefined}
@@ -624,7 +655,7 @@ export default function App({
       </Panel>
 
       <Recently
-        outcomes={outcomes}
+        outcomes={recent}
         repo={target}
         selected={selectedOutcome}
         showAuthor={showAll}

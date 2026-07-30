@@ -10,7 +10,6 @@ export type EntryState =
 export type Entry = {
   position: number;
   state: EntryState;
-  enqueuedAt: string;
   estimatedTimeToMerge: number | null;
   headCommit: { oid: string } | null;
   pullRequest: {
@@ -40,7 +39,6 @@ query($owner:String!,$name:String!,$branch:String!){
         nodes{
           position
           state
-          enqueuedAt
           estimatedTimeToMerge
           headCommit{ oid }
           pullRequest{ number title author{ login } }
@@ -81,7 +79,7 @@ export type Rate = {
   gapMinutes: number;
 };
 
-export const RECENT_LIMIT = 6;
+const OUTCOME_FETCH_LIMIT = 12;
 
 export function outcomeKey(outcome: Outcome): string {
   return `${outcome.number}-${outcome.at.getTime()}`;
@@ -101,11 +99,9 @@ async function graphql<T>(
   token: string,
   query: string,
   variables: object,
-  signal?: AbortSignal,
 ): Promise<T> {
   const res = await fetch("https://api.github.com/graphql", {
     method: "POST",
-    signal,
     headers: {
       authorization: `bearer ${token}`,
       "content-type": "application/json",
@@ -209,7 +205,7 @@ export async function fetchOutcomes(opts: {
 
   const data = await graphql<{ search: { nodes: Node[] } }>(
     opts.token,
-    `query($q:String!){ search(query:$q, type:ISSUE, first:15){ nodes{ ... on PullRequest {
+    `query($q:String!){ search(query:$q, type:ISSUE, first:10){ nodes{ ... on PullRequest {
       number title author{ login }
       removed: timelineItems(last:3, itemTypes:[REMOVED_FROM_MERGE_QUEUE_EVENT]){ nodes{ ... on RemovedFromMergeQueueEvent { createdAt reason } } }
     }}}}`,
@@ -239,7 +235,7 @@ export async function fetchOutcomes(opts: {
     }
   }
 
-  return outcomes.sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, RECENT_LIMIT);
+  return outcomes.sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, OUTCOME_FETCH_LIMIT);
 }
 
 export async function fetchRate(opts: {
@@ -271,13 +267,11 @@ export async function fetchQueue(opts: {
   owner: string;
   name: string;
   branch: string;
-  signal?: AbortSignal;
 }): Promise<Queue> {
   const data = await graphql<QueueData>(
     opts.token,
     QUERY,
     { owner: opts.owner, name: opts.name, branch: opts.branch },
-    opts.signal,
   ).catch((caught: unknown) => {
     if (!(caught instanceof HttpError)) throw caught;
 

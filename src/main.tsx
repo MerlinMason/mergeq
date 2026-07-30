@@ -1,6 +1,6 @@
 import React from "react";
 import { render } from "ink";
-import App from "./App.js";
+import App, { KEY_HINTS } from "./App.js";
 import { resolveRepo, resolveToken, SetupError } from "./auth.js";
 
 const HELP = `
@@ -18,7 +18,7 @@ const HELP = `
     --as        Follow someone else's pull requests instead of your own
 
   Keys
-    q  quit    a  yours/all    r  refresh now    o  open in a browser
+    ${KEY_HINTS}
 
   Auth comes from the GitHub CLI. Run 'gh auth login' if you have not already.
 `;
@@ -54,7 +54,8 @@ async function main() {
   const [token, repo] = await Promise.all([resolveToken(), resolveRepo(spec)]);
 
   const branch = flag("branch") ?? repo.defaultBranch;
-  const interval = Math.max(2, Number(flag("interval") ?? 5)) * 1000;
+  const seconds = Number(flag("interval") ?? 5);
+  const interval = Math.max(2, Number.isFinite(seconds) ? seconds : 5) * 1000;
 
   render(
     <App

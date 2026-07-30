@@ -107,7 +107,9 @@ bun build --compile src/cli.tsx --target=bun-linux-x64 --outfile dist/mergeq-lin
   and `--compile` fails at runtime without it.
 - Auth lives behind `resolveToken()` in `src/auth.ts`, so a `gh` extension, an
   npm package and CI all use the same path.
-- `src/cli.tsx` is a thin entry point: arg parsing, then render.
+- `src/cli.tsx` only sets `FORCE_COLOR` and then dynamically imports
+  `src/main.tsx`, which does the arg parsing and rendering. The indirection is
+  load-bearing — see Colour above.
 
 Shipping later as a `gh` extension means renaming the repo to `gh-mergeq`,
 adding the `gh-extension` topic and wiring `cli/gh-extension-precompile` to the
