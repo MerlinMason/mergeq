@@ -513,7 +513,7 @@ export default function App({
     walked = entry.position;
   }
 
-  const hints = `↑↓ pick · ⏎ open · ${showAll ? "a mine" : "a all"} · o open queue · q quit`;
+  const hints = "↑↓ pick · ⏎  open PR · a toggle all/mine · o open queue · q quit";
 
   return (
     <Box flexDirection="column" paddingX={1} paddingTop={1}>

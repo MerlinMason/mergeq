@@ -16,8 +16,8 @@ GitHub remote. Set a default with:
 export MERGEQ_REPO=incident-io/core
 ```
 
-Keys are listed under the title: `↑↓` pick · `⏎` open · `a` yours/all ·
-`o` open the queue itself · `q` quit.
+Keys are listed under the title: `↑↓` pick · `⏎` open the selected pull
+request · `a` toggle all/mine · `o` open the queue on GitHub · `q` quit.
 
 Flags: `--repo owner/name`, `--branch <name>`, `--interval <seconds>` (default
 5), `--all` to start on the full queue, `--as <login>` to follow someone else's
