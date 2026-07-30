@@ -131,7 +131,6 @@ function Mine({
   building,
   repo,
   here,
-  now,
 }: {
   entry: Entry;
   checks: Checks | undefined;
@@ -139,12 +138,10 @@ function Mine({
   building: boolean;
   repo: { owner: string; name: string };
   here: boolean;
-  now: number;
 }) {
   const state = STATES[entry.state];
   const first = entry.position === 1;
   const estimate = eta(entry.position, rate, entry.estimatedTimeToMerge);
-  const waiting = ago(new Date(entry.enqueuedAt), now);
 
   const accent = first ? "green" : building ? "cyan" : undefined;
 
@@ -215,10 +212,7 @@ function Mine({
           <Text color="gray">{state.label}</Text>
         )}
         <Spacer />
-        <Text dimColor>
-          waited {waiting} ·{" "}
-        </Text>
-        <Text color={first ? "green" : "cyan"}>~{minutes(estimate)} left</Text>
+        <Text color={first ? "green" : "cyan"}>🚀 in ~{minutes(estimate)}</Text>
       </Box>
     </Box>
   );
@@ -621,7 +615,6 @@ export default function App({
                 building={entry.position <= buildWindow}
                 repo={target}
                 here={entry.pullRequest.number === selectedEntry}
-                now={now}
               />
             </React.Fragment>
           ))
