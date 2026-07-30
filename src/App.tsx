@@ -371,6 +371,21 @@ const BRAND = "fruit";
 
 const PANEL_CHROME = 6;
 
+const WORDMARK = ["┌┬┐┌─╴┌─┐┌─╴┌─╴┌─┐", "│││├╴ ├┬┘│╶┐├╴ │┐│", "╵ ╵└─╴╵└╴└─┘└─╴└┴┘"].join("\n");
+
+function Wordmark() {
+  return (
+    <Box>
+      <Box width={4} height={3} alignItems="center" flexShrink={0}>
+        <Text>🔥</Text>
+      </Box>
+      <Gradient name={BRAND}>
+        <Text>{WORDMARK}</Text>
+      </Gradient>
+    </Box>
+  );
+}
+
 function Rule({ width }: { width: number }) {
   return (
     <Gradient name={BRAND}>
@@ -519,8 +534,12 @@ export default function App({
     <Box flexDirection="column" paddingX={1} paddingTop={1}>
       <Rule width={width} />
 
+      <Wordmark />
+
       <Box>
-        <Badge>{`${target.owner}/${target.name}`}</Badge>
+        <Text bold>
+          {target.owner}/{target.name}
+        </Text>
         <Text color="gray" dimColor>
           {" "}
           → {target.branch}
