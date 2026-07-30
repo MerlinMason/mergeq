@@ -487,6 +487,7 @@ export default function App({
       execFile("open", [pullRequestUrl(repo.owner, repo.name, selectable[cursor]!)]);
     }
     if (input === "o" && queue) execFile("open", [queue.url]);
+    if (input === "n") notify("mergeq 🚀", "notifications are working");
   });
 
   if (error instanceof SetupError) {
@@ -530,8 +531,8 @@ export default function App({
         <Text color="gray"> → {target.branch}</Text>
         <Box flexGrow={1} />
         <Text color="gray" dimColor>
-          {width >= 88
-            ? `↑↓ pick · ⏎ open · ${showAll ? "a mine" : "a all"} · r refresh · q quit`
+          {width >= 96
+            ? `↑↓ pick · ⏎ open · ${showAll ? "a mine" : "a all"} · n test · r refresh · q quit`
             : ""}
         </Text>
       </Box>
@@ -613,22 +614,6 @@ export default function App({
             selected={cursor - mine.length}
             now={now}
           />
-          {cursor >= 0 ? (
-            <Box marginTop={1}>
-              <Box width={4} flexShrink={0}>
-                <Text color="cyan" bold>
-                  ▸
-                </Text>
-              </Box>
-              <Text color="cyan" wrap="truncate">
-                {pullRequestUrl(repo.owner, repo.name, selectable[cursor]!)}
-              </Text>
-              <Box flexGrow={1} />
-              <Text color="gray" dimColor>
-                ⏎ opens it
-              </Text>
-            </Box>
-          ) : null}
           {mine.length > 0 ? <Events events={events} now={now} /> : null}
         </>
       )}

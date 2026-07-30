@@ -34,15 +34,15 @@ emoji per outcome — 🚀 shipped, 💥 checks blew up, 🥊 merge conflict, �
 by hand, 😭 for anything else. macOS gets a desktop notification for each.
 
 Move the selection with `↑`/`↓` (or `j`/`k`) and press `⏎` to open the
-highlighted pull request on GitHub. That works everywhere.
+highlighted pull request on GitHub. Pull request numbers are also OSC 8
+hyperlinks, so ⌘-click opens them in iTerm2, Ghostty, WezTerm, Kitty and
+Terminal.app. Warp merged OSC 8 support in July 2026 behind a feature flag, so
+whether ⌘-click works there depends on your build.
 
-Pull request numbers are also OSC 8 hyperlinks, so ⌘-click opens them directly
-in iTerm2, Ghostty, WezTerm, Kitty and Terminal.app.
-
-Warp does not implement OSC 8, so those numbers are inert there. The footer
-prints the selected pull request's URL in full for exactly that reason — Warp
-linkifies bare URLs, so it is ⌘-clickable even though the numbers above are
-not.
+Press `n` to fire a test notification. Notifications go through macOS, not the
+terminal: `osascript` posts them as Script Editor, so if nothing appears enable
+Script Editor under System Settings › Notifications. Installing
+`terminal-notifier` sidesteps that — mergeq uses it automatically when present.
 
 Times are relative throughout, and nothing counts up second by second — the
 display only refreshes twice a minute. If polling stalls the header says so.
