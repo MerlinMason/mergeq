@@ -6,6 +6,11 @@ export function usePoll<T>(load: (() => Promise<T>) | null, intervalMs: number) 
 
   useEffect(() => {
     if (!load) return;
+    // `load` only changes when the query itself changes, so anything already
+    // held describes a different question and must not be shown as an answer.
+    setData(null);
+    setError(null);
+
     let cancelled = false;
     let timer: NodeJS.Timeout;
 

@@ -253,6 +253,7 @@ function Recently({
   selected,
   showAuthor,
   error,
+  loading,
   now,
 }: {
   outcomes: Outcome[];
@@ -260,9 +261,20 @@ function Recently({
   selected: Outcome | null;
   showAuthor: boolean;
   error: Error | null;
+  loading: boolean;
   now: number;
 }) {
   if (outcomes.length === 0) {
+    if (loading) {
+      return (
+        <Panel title="RECENTLY">
+          <Box>
+            <Spinner color="cyan" />
+            <Text dimColor> looking…</Text>
+          </Box>
+        </Panel>
+      );
+    }
     if (!error) return null;
     return (
       <Panel title="RECENTLY">
@@ -479,6 +491,7 @@ export default function App({
   );
   const { data: rate } = usePoll(loadRate, 300_000);
   const outcomes = outcomeData ?? NO_OUTCOMES;
+  const outcomesLoading = Boolean(viewer) && outcomeData === null && !outcomeError;
 
   const seen = useRef<Set<string> | null>(null);
 
@@ -679,6 +692,7 @@ export default function App({
         selected={selectedOutcome}
         showAuthor={showAll}
         error={outcomeError}
+        loading={outcomesLoading}
         now={now}
       />
       {!showAll && mine.length > 0 ? <Events events={events} now={now} /> : null}
