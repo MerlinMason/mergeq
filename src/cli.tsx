@@ -15,7 +15,8 @@ const HELP = `
     $ mergeq [--repo owner/name] [--branch master] [--interval 5]
 
   Options
-    --repo      Repository to watch (defaults to the current directory's repo)
+    --repo      Repository to watch (defaults to $MERGEQ_REPO, then the
+                current directory's repo)
     --branch    Queued branch (defaults to the repository's default branch)
     --interval  Seconds between polls (default 5)
 
@@ -50,7 +51,7 @@ async function main() {
 
   const token = await resolveToken();
 
-  const repoFlag = flag("repo");
+  const repoFlag = flag("repo") ?? process.env.MERGEQ_REPO;
   let owner: string;
   let name: string;
 

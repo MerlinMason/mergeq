@@ -53,12 +53,21 @@ export async function resolveRepo(): Promise<{ owner: string; name: string }> {
   ]).catch(() => "");
 
   const [owner, name] = raw.split("/");
-  if (!owner || !name) {
-    throw new SetupError("Not inside a GitHub repository.", [
-      "cd into a repo, or pass --repo owner/name",
-    ]);
-  }
-  return { owner, name };
+  if (owner && name) return { owner, name };
+
+  const inGitRepo = await run("git", ["rev-parse", "--is-inside-work-tree"])
+    .then(() => true)
+    .catch(() => false);
+
+  throw new SetupError(
+    inGitRepo
+      ? "This git repository has no GitHub remote."
+      : "Not inside a git repository.",
+    [
+      "mergeq --repo owner/name",
+      "or export MERGEQ_REPO=owner/name to set a default",
+    ],
+  );
 }
 
 export async function resolveDefaultBranch(

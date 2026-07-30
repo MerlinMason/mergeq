@@ -4,8 +4,16 @@ Watch a GitHub merge queue in your terminal.
 
 ```bash
 bun install
-bun run dev                       # current directory's repo, default branch
-bun run dev -- --repo incident-io/core --branch master
+bun run dev --repo incident-io/core
+```
+
+With no `--repo`, it falls back to `$MERGEQ_REPO` and then to the current
+directory's repository — so `bun run dev` on its own works from inside a
+checkout of the repo you want to watch, but not from this one, which has no
+GitHub remote. Set a default with:
+
+```bash
+export MERGEQ_REPO=incident-io/core
 ```
 
 Keys: `q` quit · `r` refresh now · `o` open the queue in a browser.
