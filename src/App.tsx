@@ -55,15 +55,15 @@ const NOTHING_QUEUED = [
 
 function useWidth(): number {
   const { stdout } = useStdout();
-  const [width, setWidth] = useState(stdout.columns || 100);
+  const [, bump] = useState(0);
   useEffect(() => {
-    const onResize = () => setWidth(stdout.columns || 100);
+    const onResize = () => bump((value) => value + 1);
     stdout.on("resize", onResize);
     return () => {
       stdout.off("resize", onResize);
     };
   }, [stdout]);
-  return width;
+  return stdout.columns || 100;
 }
 
 function useSpinner(active: boolean): string {
@@ -123,14 +123,21 @@ export function Ahead({
   width: number;
 }) {
   const wait = rate ? rate.gapMinutes * count : null;
-  const rule = "─".repeat(Math.max(4, Math.min(40, width - 34)));
+  const label = `${count} ahead`;
+  const right = wait === null ? "" : `~${minutes(wait)}`;
+  const rule = "─".repeat(Math.max(3, width - 2 - 4 - label.length - right.length - 3));
+
   return (
     <Box>
+      <Box width={4} flexShrink={0}>
+        <Text color="gray" dimColor>
+          {"  ⋯"}
+        </Text>
+      </Box>
       <Text color="gray" dimColor>
-        {"   ▸ "}
-        {count} ahead {rule}
+        {label} {rule}
       </Text>
-      {wait !== null ? <Text color="gray"> ~{minutes(wait)}</Text> : null}
+      {right ? <Text color="gray"> {right}</Text> : null}
     </Box>
   );
 }
@@ -186,12 +193,12 @@ export function Mine({
             {entry.pullRequest.title}
           </Text>
         </Box>
-        <Box width={7} flexShrink={0}>
+        <Box width={7} flexShrink={0} justifyContent="flex-end">
           <Text color="gray">pos {entry.position}</Text>
         </Box>
       </Box>
 
-      <Box marginLeft={3}>
+      <Box marginLeft={4}>
         {first ? (
           <Text color="green" bold>
             🚀 you&apos;re up next{" "}
@@ -253,7 +260,7 @@ function Recently({
         const here = index === selected;
         return (
           <Box key={`${outcome.number}-${outcome.at.getTime()}`}>
-            <Box width={2} flexShrink={0}>
+            <Box width={4} flexShrink={0}>
               <Text color="cyan" bold>
                 {here ? "▸" : " "}
               </Text>
@@ -273,7 +280,7 @@ function Recently({
                 {reason.emoji} {reason.label} {ago(outcome.at, now)} ago
               </Text>
             </Box>
-            <Box width={14} flexShrink={0}>
+            <Box width={14} flexShrink={0} justifyContent="flex-end">
               {outcome.queuedMinutes !== null ? (
                 <Text color="gray" dimColor wrap="truncate">
                   ⏱️ {merged ? "in" : "after"} {minutes(outcome.queuedMinutes)}
