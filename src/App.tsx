@@ -623,7 +623,7 @@ export default function App({
             <React.Fragment key={entry.pullRequest.number}>
               {index === buildWindow && buildWindow > 0 ? (
                 <Text dimColor>
-                  {"─".repeat(24)} not building yet
+                  {NOT_BUILDING}
                 </Text>
               ) : null}
               <AllRow
