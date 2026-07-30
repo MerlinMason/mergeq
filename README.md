@@ -39,10 +39,19 @@ hyperlinks, so ⌘-click opens them in iTerm2, Ghostty, WezTerm, Kitty and
 Terminal.app. Warp merged OSC 8 support in July 2026 behind a feature flag, so
 whether ⌘-click works there depends on your build.
 
-Press `n` to fire a test notification. Notifications go through macOS, not the
-terminal: `osascript` posts them as Script Editor, so if nothing appears enable
-Script Editor under System Settings › Notifications. Installing
-`terminal-notifier` sidesteps that — mergeq uses it automatically when present.
+Press `n` to fire a test notification; the notification itself names the route
+it took.
+
+Notifications pick the best available route, in order:
+
+1. **OSC 777 escape** — Warp, WezTerm, Ghostty, Kitty and foot raise the
+   notification themselves. No dependency, no separate permission.
+2. **`terminal-notifier`** — used automatically if it is on `$PATH`.
+3. **`osascript`** — the fallback. macOS attributes these to Script Editor, so
+   if nothing appears, enable Script Editor under System Settings ›
+   Notifications.
+
+Set `MERGEQ_NOTIFY=off` to silence them.
 
 Times are relative throughout, and nothing counts up second by second — the
 display only refreshes twice a minute. If polling stalls the header says so.

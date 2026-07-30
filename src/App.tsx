@@ -3,7 +3,7 @@ import { Box, Text, useApp, useInput, useStdout } from "ink";
 import { execFile } from "node:child_process";
 import { useQueue, type Event, type Target } from "./useQueue.js";
 import { usePoll } from "./usePoll.js";
-import { notify } from "./notify.js";
+import { method, notify } from "./notify.js";
 import { SetupError } from "./auth.js";
 import { link, pullRequestUrl } from "./link.js";
 import {
@@ -487,7 +487,7 @@ export default function App({
       execFile("open", [pullRequestUrl(repo.owner, repo.name, selectable[cursor]!)]);
     }
     if (input === "o" && queue) execFile("open", [queue.url]);
-    if (input === "n") notify("mergeq 🚀", "notifications are working");
+    if (input === "n") notify("mergeq 🚀", `notifications are working, via ${method}`);
   });
 
   if (error instanceof SetupError) {
