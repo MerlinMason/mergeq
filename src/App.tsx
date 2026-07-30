@@ -362,6 +362,14 @@ const BRAND = "fruit";
 
 const PANEL_CHROME = 6;
 
+function Rule({ width }: { width: number }) {
+  return (
+    <Gradient name={BRAND}>
+      <Text dimColor>{"─".repeat(Math.max(10, width - 2))}</Text>
+    </Gradient>
+  );
+}
+
 function Badge({ children }: { children?: string }) {
   return (
     <Gradient name={BRAND}>
@@ -504,7 +512,9 @@ export default function App({
   const repoLabel = ` mergeq ${target.owner}/${target.name} → ${target.branch}`;
 
   return (
-    <Box flexDirection="column" paddingX={1}>
+    <Box flexDirection="column" paddingX={1} paddingTop={1}>
+      <Rule width={width} />
+
       <Box>
         <Badge>{`${target.owner}/${target.name}`}</Badge>
         <Text color="gray" dimColor>
@@ -516,10 +526,6 @@ export default function App({
           {width >= hints.length + repoLabel.length + 6 ? hints : ""}
         </Text>
       </Box>
-
-      <Gradient name={BRAND}>
-        <Text dimColor>{"─".repeat(Math.max(10, width - 2))}</Text>
-      </Gradient>
 
       <Panel title="QUEUE">
         <Box>
