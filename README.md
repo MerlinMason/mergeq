@@ -33,9 +33,12 @@ gets a check-progress bar, the check currently running, and an estimate.
 emoji per outcome — 🚀 shipped, 💥 checks blew up, 🥊 merge conflict, ✋ yanked
 by hand, 😭 for anything else. macOS gets a desktop notification for each.
 
-Pull request numbers are OSC 8 hyperlinks, so ⌘-click opens them on GitHub in
-any terminal that supports the escape (iTerm2, Ghostty, WezTerm, Kitty, and
-Terminal.app). Elsewhere they render as plain text.
+Move the selection with `↑`/`↓` (or `j`/`k`) and press `⏎` to open the
+highlighted pull request on GitHub. That works everywhere.
+
+Pull request numbers are also OSC 8 hyperlinks, so ⌘-click opens them directly
+in iTerm2, Ghostty, WezTerm, Kitty and Terminal.app. Warp does not implement
+OSC 8, so the numbers render as plain text there and `⏎` is the way in.
 
 Times are relative throughout, and nothing counts up second by second — the
 display only refreshes twice a minute. If polling stalls the header says so.

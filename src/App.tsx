@@ -142,6 +142,7 @@ export function Mine({
   building,
   spinner,
   repo,
+  here,
   now,
 }: {
   entry: Entry;
@@ -150,6 +151,7 @@ export function Mine({
   building: boolean;
   spinner: string;
   repo: { owner: string; name: string };
+  here: boolean;
   now: number;
 }) {
   const state = STATES[entry.state];
@@ -163,11 +165,16 @@ export function Mine({
   return (
     <Box flexDirection="column">
       <Box>
-        <Box width={3} flexShrink={0}>
-          <Text color={first ? "green" : state.color}> {icon}</Text>
+        <Box width={2} flexShrink={0}>
+          <Text color="cyan" bold>
+            {here ? "▸" : " "}
+          </Text>
+        </Box>
+        <Box width={2} flexShrink={0}>
+          <Text color={first ? "green" : state.color}>{icon}</Text>
         </Box>
         <Box width={8} flexShrink={0}>
-          <Text color={accent} bold>
+          <Text color={accent} bold underline={here}>
             {link(
               `#${entry.pullRequest.number}`,
               pullRequestUrl(repo.owner, repo.name, entry.pullRequest.number),
@@ -228,48 +235,50 @@ export function Mine({
 function Recently({
   outcomes,
   repo,
+  selected,
   now,
 }: {
   outcomes: Outcome[];
   repo: { owner: string; name: string };
+  selected: number;
   now: number;
 }) {
   if (outcomes.length === 0) return null;
   return (
     <Box flexDirection="column">
       <Section title="RECENTLY" />
-      {outcomes.slice(0, 6).map((outcome) => {
+      {outcomes.slice(0, 6).map((outcome, index) => {
         const merged = outcome.kind === "merged";
         const reason = reasonOf(merged ? "merged" : outcome.reason);
-        const took =
-          merged && outcome.queuedMinutes !== null
-            ? ` after ${minutes(outcome.queuedMinutes)}`
-            : "";
+        const here = index === selected;
         return (
           <Box key={`${outcome.number}-${outcome.at.getTime()}`}>
-            <Box width={3} flexShrink={0}>
-              <Text>{reason.emoji}</Text>
+            <Box width={2} flexShrink={0}>
+              <Text color="cyan" bold>
+                {here ? "▸" : " "}
+              </Text>
             </Box>
             <Box width={8} flexShrink={0}>
-              <Text color={merged ? "green" : "red"}>
+              <Text color={merged ? "green" : "red"} bold={here} underline={here}>
                 {link(`#${outcome.number}`, pullRequestUrl(repo.owner, repo.name, outcome.number))}
               </Text>
             </Box>
             <Box flexGrow={1} flexShrink={1} minWidth={0} marginRight={1}>
-              <Text wrap="truncate" color="gray">
+              <Text wrap="truncate" color={here ? "white" : "gray"}>
                 {outcome.title}
               </Text>
             </Box>
-            <Box width={22} flexShrink={0}>
+            <Box width={25} flexShrink={0}>
               <Text color={merged ? "green" : "red"} wrap="truncate">
-                {reason.label}
-                {took}
+                {reason.emoji} {reason.label} {ago(outcome.at, now)} ago
               </Text>
             </Box>
-            <Box width={9} flexShrink={0}>
-              <Text color="gray" dimColor>
-                {ago(outcome.at, now)} ago
-              </Text>
+            <Box width={14} flexShrink={0}>
+              {outcome.queuedMinutes !== null ? (
+                <Text color="gray" dimColor wrap="truncate">
+                  ⏱️ {merged ? "in" : "after"} {minutes(outcome.queuedMinutes)}
+                </Text>
+              ) : null}
             </Box>
           </Box>
         );
@@ -406,6 +415,7 @@ export default function App({
   const spinner = useSpinner(true);
   const [now, setNow] = useState(Date.now());
   const [showAll, setShowAll] = useState(all);
+  const [selection, setSelection] = useState(0);
 
   const viewer = as ?? queue?.viewer ?? "";
 
@@ -447,10 +457,28 @@ export default function App({
     return () => clearInterval(id);
   }, []);
 
+  const repo = { owner: target.owner, name: target.name };
+  const stale = updatedAt !== null && now - updatedAt.getTime() > 30_000;
+  const entries = queue?.entries ?? [];
+  const mine = entries.filter((entry) => entry.pullRequest.author?.login === viewer);
+  const buildWindow = queue?.maximumEntriesToBuild ?? 0;
+  const busy = busyness(queue?.totalCount ?? 0);
+
+  const selectable = [
+    ...mine.map((entry) => entry.pullRequest.number),
+    ...outcomes.slice(0, 6).map((outcome) => outcome.number),
+  ];
+  const cursor = selectable.length === 0 ? -1 : Math.min(selection, selectable.length - 1);
+
   useInput((input, key) => {
     if (input === "q" || key.escape || (key.ctrl && input === "c")) exit();
     if (input === "r") refresh();
     if (input === "a") setShowAll((value) => !value);
+    if (input === "j" || key.downArrow) setSelection((value) => value + 1);
+    if (input === "k" || key.upArrow) setSelection((value) => Math.max(0, value - 1));
+    if (key.return && cursor >= 0) {
+      execFile("open", [pullRequestUrl(repo.owner, repo.name, selectable[cursor]!)]);
+    }
     if (input === "o" && queue) execFile("open", [queue.url]);
   });
 
@@ -475,18 +503,11 @@ export default function App({
     );
   }
 
-  const repo = { owner: target.owner, name: target.name };
-  const stale = updatedAt !== null && now - updatedAt.getTime() > 30_000;
-  const entries = queue?.entries ?? [];
-  const mine = entries.filter((entry) => entry.pullRequest.author?.login === viewer);
-  const buildWindow = queue?.maximumEntriesToBuild ?? 0;
-  const busy = busyness(queue?.totalCount ?? 0);
-
   const groups: { ahead: number; entry: Entry }[] = [];
-  let cursor = 0;
+  let walked = 0;
   for (const entry of mine) {
-    groups.push({ ahead: entry.position - 1 - cursor, entry });
-    cursor = entry.position;
+    groups.push({ ahead: entry.position - 1 - walked, entry });
+    walked = entry.position;
   }
 
   return (
@@ -502,7 +523,9 @@ export default function App({
         <Text color="gray"> → {target.branch}</Text>
         <Box flexGrow={1} />
         <Text color="gray" dimColor>
-          {width >= 74 ? `q quit · ${showAll ? "a mine" : "a all"} · r refresh · o open` : ""}
+          {width >= 88
+            ? `↑↓ pick · ⏎ open · ${showAll ? "a mine" : "a all"} · r refresh · q quit`
+            : ""}
         </Text>
       </Box>
 
@@ -557,7 +580,7 @@ export default function App({
           {mine.length > 0 ? (
             <Box flexDirection="column">
               <Section title="YOURS" />
-              {groups.map(({ ahead, entry }) => (
+              {groups.map(({ ahead, entry }, index) => (
                 <React.Fragment key={entry.pullRequest.number}>
                   {ahead > 0 ? <Ahead count={ahead} rate={rate} width={width} /> : null}
                   <Mine
@@ -567,6 +590,7 @@ export default function App({
                     building={entry.position <= buildWindow}
                     spinner={spinner}
                     repo={repo}
+                    here={cursor === index}
                     now={now}
                   />
                 </React.Fragment>
@@ -576,7 +600,12 @@ export default function App({
             <Empty depth={queue.totalCount} rate={rate} outcomes={outcomes} now={now} />
           ) : null}
 
-          <Recently outcomes={outcomes} repo={repo} now={now} />
+          <Recently
+            outcomes={outcomes}
+            repo={repo}
+            selected={cursor - mine.length}
+            now={now}
+          />
           {mine.length > 0 ? <Events events={events} now={now} /> : null}
         </>
       )}
