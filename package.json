@@ -12,7 +12,9 @@
     "check": "tsc --noEmit"
   },
   "dependencies": {
+    "@mishieck/ink-titled-box": "^0.4.2",
     "ink": "^7.1.1",
+    "ink-gradient": "^4.0.1",
     "react": "^19.2.0",
     "react-devtools-core": "^6.1.2"
   },

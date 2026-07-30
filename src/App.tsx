@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Box, Spacer, Text, useAnimation, useApp, useInput, useWindowSize } from "ink";
+import Gradient from "ink-gradient";
+import { TitledBox, titleStyles } from "@mishieck/ink-titled-box";
 import { useQueue, type Event, type Target } from "./useQueue.js";
 import { usePoll } from "./usePoll.js";
 import { method, notify } from "./notify.js";
@@ -88,16 +90,6 @@ function bar(done: number, total: number): string {
 function eta(position: number, rate: Rate | null, fallback: number | null): number | null {
   if (rate) return position * rate.gapMinutes;
   return fallback === null ? null : fallback / 60;
-}
-
-function Section({ title }: { title: string }) {
-  return (
-    <Box marginTop={1}>
-      <Text color="gray" dimColor bold>
-        {title}
-      </Text>
-    </Box>
-  );
 }
 
 function Ahead({
@@ -242,8 +234,7 @@ function Recently({
 }) {
   if (outcomes.length === 0) return null;
   return (
-    <Box flexDirection="column">
-      <Section title="RECENTLY" />
+    <Panel title="RECENTLY">
       {outcomes.map((outcome) => {
         const merged = outcome.kind === "merged";
         const reason = reasonOf(outcome.reason);
@@ -280,7 +271,7 @@ function Recently({
           </Box>
         );
       })}
-    </Box>
+    </Panel>
   );
 }
 
@@ -373,10 +364,9 @@ function AllRow({
 function Events({ events, now }: { events: Event[]; now: number }) {
   if (events.length === 0) return null;
   return (
-    <Box flexDirection="column">
-      <Section title="ACTIVITY" />
+    <Panel title="ACTIVITY">
       {events.slice(0, 3).map((event) => (
-        <Box key={event.id} marginLeft={3}>
+        <Box key={event.id}>
           <Text color="gray" dimColor>
             {ago(event.at, now)} ago{" "}
           </Text>
@@ -388,15 +378,31 @@ function Events({ events, now }: { events: Event[]; now: number }) {
           </Text>
         </Box>
       ))}
-    </Box>
+    </Panel>
   );
 }
 
 function Badge() {
   return (
-    <Text backgroundColor="cyan" color="black" bold>
-      {" mergeq "}
-    </Text>
+    <Gradient colors={["#22d3ee", "#a855f7"]}>
+      <Text bold>mergeq</Text>
+    </Gradient>
+  );
+}
+
+function Panel({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <TitledBox
+      borderStyle="round"
+      borderColor="gray"
+      titles={[title]}
+      titleStyles={titleStyles.rectangle}
+      flexDirection="column"
+      paddingX={1}
+      marginTop={1}
+    >
+      {children}
+    </TitledBox>
   );
 }
 
@@ -582,11 +588,10 @@ export default function App({
       ) : (
         <>
           {mine.length > 0 ? (
-            <Box flexDirection="column">
-              <Section title="YOURS" />
+            <Panel title="YOURS">
               {groups.map(({ ahead, entry }) => (
                 <React.Fragment key={entry.pullRequest.number}>
-                  {ahead > 0 ? <Ahead count={ahead} rate={rate} width={width} /> : null}
+                  {ahead > 0 ? <Ahead count={ahead} rate={rate} width={width - 4} /> : null}
                   <Mine
                     entry={entry}
                     checks={entry.headCommit ? checks.get(entry.headCommit.oid) : undefined}
@@ -598,7 +603,7 @@ export default function App({
                   />
                 </React.Fragment>
               ))}
-            </Box>
+            </Panel>
           ) : queue ? (
             <Empty depth={queue.totalCount} rate={rate} outcomes={outcomes} now={now} />
           ) : null}
