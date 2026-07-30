@@ -280,11 +280,11 @@ function Empty({ outcomes, now }: { outcomes: Outcome[]; now: number }) {
     () => NOTHING_QUEUED[Math.floor(Math.random() * NOTHING_QUEUED.length)]!,
   );
   return (
-    <Panel title="YOURS">
+    <Panel title="QUEUE">
       <Text color="greenBright">{greeting}</Text>
       {lastMerge ? (
         <Text color="gray" dimColor>
-          last shipped #{lastMerge.number} · {ago(lastMerge.at, now)} ago
+          You last shipped #{lastMerge.number} · {ago(lastMerge.at, now)} ago
         </Text>
       ) : null}
     </Panel>
@@ -577,7 +577,7 @@ export default function App({
       ) : (
         <>
           {mine.length > 0 ? (
-            <Panel title="YOURS">
+            <Panel title="QUEUE">
               {groups.map(({ ahead, entry }) => (
                 <React.Fragment key={entry.pullRequest.number}>
                   {ahead > 0 ? <Ahead count={ahead} rate={rate} width={width - 4} /> : null}
