@@ -77,7 +77,6 @@ export function useQueue(target: Target, intervalMs: number) {
   const [fetching, setFetching] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
 
-  const [nonce, setNonce] = useState(0);
   const previous = useRef<Entry[] | null>(null);
   const failures = useRef(0);
   const fatal = useRef(false);
@@ -146,11 +145,9 @@ export function useQueue(target: Target, intervalMs: number) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [poll, intervalMs, nonce]);
-
-  const refresh = useCallback(() => setNonce((n) => n + 1), []);
+  }, [poll, intervalMs]);
 
   const viewer = target.as ?? queue?.viewer ?? "";
 
-  return { queue, viewer, checks, events, error, fetching, updatedAt, refresh };
+  return { queue, viewer, checks, events, error, fetching, updatedAt };
 }

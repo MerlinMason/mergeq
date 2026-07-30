@@ -16,8 +16,8 @@ GitHub remote. Set a default with:
 export MERGEQ_REPO=incident-io/core
 ```
 
-Keys are listed under the title: `↑↓` pick · `enter` open · `a` yours/all ·
-`n` test notification · `r` refresh · `q` quit. `o` opens the queue itself.
+Keys are listed under the title: `↑↓` pick · `⏎` open · `a` yours/all ·
+`o` open the queue itself · `q` quit.
 
 Flags: `--repo owner/name`, `--branch <name>`, `--interval <seconds>` (default
 5), `--all` to start on the full queue, `--as <login>` to follow someone else's
@@ -39,9 +39,6 @@ highlighted pull request on GitHub. Pull request numbers are also OSC 8
 hyperlinks, so ⌘-click opens them in iTerm2, Ghostty, WezTerm, Kitty and
 Terminal.app. Warp merged OSC 8 support in July 2026 behind a feature flag, so
 whether ⌘-click works there depends on your build.
-
-Press `n` to fire a test notification; the notification itself names the route
-it took.
 
 Notifications pick the best available route, in order:
 

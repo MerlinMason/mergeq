@@ -41,7 +41,7 @@ const CHANNELS: Record<Exclude<Method, "none">, (title: string, body: string) =>
 let notifier: string | null = null;
 let resolved: Method | null = null;
 
-export function method(): Method {
+function method(): Method {
   if (resolved) return resolved;
 
   if (supportsEscapeNotifications()) {

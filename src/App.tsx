@@ -4,7 +4,7 @@ import Gradient from "ink-gradient";
 import { TitledBox, titleStyles } from "@mishieck/ink-titled-box";
 import { useQueue, type Event, type Target } from "./useQueue.js";
 import { usePoll } from "./usePoll.js";
-import { method, notify } from "./notify.js";
+import { notify } from "./notify.js";
 import { SetupError } from "./auth.js";
 import { link, openUrl, pullRequestUrl } from "./link.js";
 import {
@@ -405,10 +405,7 @@ export default function App({
 }) {
   const { exit } = useApp();
   const { columns: width } = useWindowSize();
-  const { queue, viewer, checks, events, error, fetching, updatedAt, refresh } = useQueue(
-    target,
-    interval,
-  );
+  const { queue, viewer, checks, events, error, fetching, updatedAt } = useQueue(target, interval);
   const [now, setNow] = useState(Date.now());
   const [showAll, setShowAll] = useState(all);
   const [selection, setSelection] = useState(0);
@@ -473,13 +470,11 @@ export default function App({
 
   useInput((input, key) => {
     if (input === "q" || key.escape || (key.ctrl && input === "c")) exit();
-    if (input === "r") refresh();
     if (input === "a") setShowAll((value) => !value);
     if (input === "j" || key.downArrow) setSelection((value) => value + 1);
     if (input === "k" || key.upArrow) setSelection((value) => Math.max(0, value - 1));
     if (key.return && selected) openUrl(pullRequestUrl(target.owner, target.name, selected.number));
     if (input === "o" && queue) openUrl(queue.url);
-    if (input === "n") notify("mergeq 🚀", `notifications are working, via ${method()}`);
   });
 
   if (error instanceof SetupError) {
@@ -508,7 +503,7 @@ export default function App({
     walked = entry.position;
   }
 
-  const hints = `↑↓ pick · enter open · ${showAll ? "a mine" : "a all"} · n test · r refresh · q quit`;
+  const hints = `↑↓ pick · ⏎ open · ${showAll ? "a mine" : "a all"} · o queue · q quit`;
 
   return (
     <Box flexDirection="column" paddingX={1} paddingTop={1}>
