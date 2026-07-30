@@ -52,6 +52,22 @@ Notifications pick the best available route, in order:
 
 Set `MERGEQ_NOTIFY=off` to silence them.
 
+## Colour
+
+Text that carries no meaning of its own takes the terminal's default
+foreground, and recedes with `dimColor` rather than a grey from the palette:
+`white` and `black` name the ends of the palette rather than "readable", so on
+a light theme white text lands on a white background. Named colours elsewhere
+are palette indices, which the theme remaps, so red still reads as red under
+Solarized.
+
+The wordmark and rules are true colour and do not adapt — they are decoration
+and carry nothing you need.
+
+`NO_COLOR` is honoured. Chalk ignores it under Bun but respects `FORCE_COLOR`,
+so `src/cli.tsx` translates one into the other before anything that draws is
+imported.
+
 Times are relative throughout, and nothing counts up second by second — the
 display only refreshes twice a minute. If polling stalls the header says so.
 

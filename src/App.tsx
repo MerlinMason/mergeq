@@ -112,11 +112,11 @@ function Ahead({
   return (
     <Box>
       <Box width={4} flexShrink={0}>
-        <Text color="gray" dimColor>
+        <Text dimColor>
           {"  ⋯"}
         </Text>
       </Box>
-      <Text color="gray" dimColor>
+      <Text dimColor>
         {label} {rule}
       </Text>
       {right ? <Text color="gray"> {right}</Text> : null}
@@ -146,7 +146,7 @@ function Mine({
   const estimate = eta(entry.position, rate, entry.estimatedTimeToMerge);
   const waiting = ago(new Date(entry.enqueuedAt), now);
 
-  const accent = first ? "green" : building ? "cyan" : "white";
+  const accent = first ? "green" : building ? "cyan" : undefined;
 
   return (
     <Box flexDirection="column">
@@ -205,7 +205,7 @@ function Mine({
               </Text>
             ) : null}
             {checks.running ? (
-              <Text color="gray" dimColor wrap="truncate">
+              <Text dimColor wrap="truncate">
                 {" "}
                 · {checks.running}
               </Text>
@@ -215,7 +215,7 @@ function Mine({
           <Text color="gray">{state.label}</Text>
         )}
         <Spacer />
-        <Text color="gray" dimColor>
+        <Text dimColor>
           waited {waiting} ·{" "}
         </Text>
         <Text color={first ? "green" : "cyan"}>~{minutes(estimate)} left</Text>
@@ -252,18 +252,18 @@ function Recently({
               </Text>
             </Box>
             <Box width={8} flexShrink={0}>
-              <Text color="white" bold={here} underline={here}>
+              <Text bold={here} underline={here}>
                 {link(`#${outcome.number}`, pullRequestUrl(repo.owner, repo.name, outcome.number))}
               </Text>
             </Box>
             <Box flexGrow={1} flexShrink={1} minWidth={0} marginRight={2}>
-              <Text wrap="truncate" color={here ? "whiteBright" : undefined} dimColor={!here}>
+              <Text wrap="truncate" bold={here} dimColor={!here}>
                 {outcome.title}
               </Text>
             </Box>
             {showAuthor ? (
               <Box width={14} marginRight={2} flexShrink={0}>
-                <Text color="gray" dimColor wrap="truncate">
+                <Text dimColor wrap="truncate">
                   {outcome.author}
                 </Text>
               </Box>
@@ -288,9 +288,9 @@ function Empty({ outcomes, now }: { outcomes: Outcome[]; now: number }) {
   );
   return (
     <>
-      <Text color="white">{greeting}</Text>
+      <Text>{greeting}</Text>
       {lastMerge ? (
-        <Text color="gray" dimColor>
+        <Text dimColor>
           You last shipped #{lastMerge.number} · {ago(lastMerge.at, now)} ago
         </Text>
       ) : null}
@@ -352,11 +352,11 @@ function Events({ events, now }: { events: Event[]; now: number }) {
     <Panel title="ACTIVITY">
       {events.slice(0, 3).map((event) => (
         <Box key={event.id}>
-          <Text color="gray" dimColor>
+          <Text dimColor>
             {ago(event.at, now)} ago{" "}
           </Text>
           <Text
-            color={event.tone === "good" ? "green" : event.tone === "bad" ? "red" : "white"}
+            color={event.tone === "good" ? "green" : event.tone === "bad" ? "red" : undefined}
             bold={event.mine}
           >
             {event.text}
@@ -535,14 +535,14 @@ export default function App({
         <Text bold>
           {target.owner}/{target.name}
         </Text>
-        <Text color="gray" dimColor>
+        <Text dimColor>
           {" "}
           → {target.branch}
         </Text>
       </Box>
 
       <Box marginBottom={1}>
-        <Text color="gray" dimColor wrap="truncate">
+        <Text dimColor wrap="truncate">
           {hints}
         </Text>
       </Box>
@@ -551,20 +551,20 @@ export default function App({
         <Box>
           {queue ? (
             <Text>
-              <Text bold color="whiteBright">
+              <Text bold>
                 {queue.totalCount}
               </Text>
-              <Text color="gray" dimColor>
+              <Text dimColor>
                 {" "}
                 queued
               </Text>
-              <Text color="gray" dimColor>
+              <Text dimColor>
                 {"   "}
               </Text>
               <Text>{busy.emoji} </Text>
               <Text color={busy.color}>{busy.label}</Text>
               {rate ? (
-                <Text color="gray" dimColor>
+                <Text dimColor>
                   {"   "}~{minutes(rate.gapMinutes)} between merges
                 </Text>
               ) : null}
@@ -588,12 +588,12 @@ export default function App({
 
         {showAll ? (
           queue && entries.length === 0 ? (
-            <Text color="white">🍺 nothing in the queue — everyone must be at the pub</Text>
+            <Text>🍺 nothing in the queue — everyone must be at the pub</Text>
           ) : (
             entries.map((entry, index) => (
             <React.Fragment key={entry.pullRequest.number}>
               {index === buildWindow && buildWindow > 0 ? (
-                <Text color="gray" dimColor>
+                <Text dimColor>
                   {"─".repeat(24)} not building yet
                 </Text>
               ) : null}
