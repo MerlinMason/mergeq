@@ -1,12 +1,7 @@
 import React from "react";
 import { render } from "ink";
 import App from "./App.js";
-import {
-  resolveDefaultBranch,
-  resolveRepo,
-  resolveToken,
-  SetupError,
-} from "./auth.js";
+import { resolveRepo, resolveToken, SetupError } from "./auth.js";
 
 const HELP = `
   mergeq — watch a GitHub merge queue in your terminal
@@ -51,32 +46,21 @@ async function main() {
     return;
   }
 
-  const token = await resolveToken();
-
-  const repoFlag = flag("repo") ?? process.env.MERGEQ_REPO;
-  let owner: string;
-  let name: string;
-
-  if (repoFlag) {
-    const [o, n] = repoFlag.split("/");
-    if (!o || !n) throw new SetupError(`Invalid --repo "${repoFlag}".`, ["Use owner/name"]);
-    owner = o;
-    name = n;
-  } else {
-    ({ owner, name } = await resolveRepo());
+  const spec = flag("repo") ?? process.env.MERGEQ_REPO;
+  if (spec && !/^[^/]+\/[^/]+$/.test(spec)) {
+    throw new SetupError(`Invalid --repo "${spec}".`, ["Use owner/name"]);
   }
 
-  const branch = flag("branch") ?? (await resolveDefaultBranch(owner, name));
-  const interval = Math.max(2, Number(flag("interval") ?? 5)) * 1000;
+  const [token, repo] = await Promise.all([resolveToken(), resolveRepo(spec)]);
 
-  const as = flag("as");
+  const branch = flag("branch") ?? repo.defaultBranch;
+  const interval = Math.max(2, Number(flag("interval") ?? 5)) * 1000;
 
   render(
     <App
-      target={{ token, owner, name, branch, as }}
+      target={{ token, owner: repo.owner, name: repo.name, branch, as: flag("as") }}
       interval={interval}
       all={process.argv.includes("--all")}
-      as={as}
     />,
   );
 }

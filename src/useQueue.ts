@@ -80,15 +80,17 @@ export function useQueue(target: Target, intervalMs: number) {
   const [nonce, setNonce] = useState(0);
   const previous = useRef<Entry[] | null>(null);
   const failures = useRef(0);
+  const fatal = useRef(false);
   const nextId = useRef(0);
 
   const poll = useCallback(async () => {
     setFetching(true);
     try {
       const result = await fetchQueue(target);
+      const viewer = target.as ?? result.viewer;
 
       if (previous.current) {
-        const fresh = diff(previous.current, result.entries, result.viewer);
+        const fresh = diff(previous.current, result.entries, viewer);
         if (fresh.length > 0) {
           const at = new Date();
           setEvents((current) =>
@@ -100,28 +102,28 @@ export function useQueue(target: Target, intervalMs: number) {
         }
       }
 
-      const viewer = target.as ?? result.viewer;
-      const oids = result.entries
-        .filter((entry) => entry.pullRequest.author?.login === viewer)
-        .map((entry) => entry.headCommit?.oid)
-        .filter((oid): oid is string => Boolean(oid))
-        .slice(0, 6);
-
-      if (oids.length > 0) {
-        setChecks(await fetchChecks({ ...target, oids }).catch(() => new Map()));
-      } else {
-        setChecks(new Map());
-      }
-
       previous.current = result.entries;
       failures.current = 0;
       setQueue(result);
       setUpdatedAt(new Date());
       setError(null);
+
+      const oids = result.entries
+        .filter((entry) => entry.pullRequest.author?.login === viewer)
+        .map((entry) => entry.headCommit?.oid)
+        .filter((oid): oid is string => Boolean(oid));
+
+      if (oids.length === 0) {
+        setChecks(new Map());
+      } else {
+        void fetchChecks({ ...target, oids })
+          .then(setChecks)
+          .catch(() => {});
+      }
     } catch (caught) {
       failures.current += 1;
+      fatal.current = caught instanceof SetupError;
       setError(caught as Error);
-      if (caught instanceof SetupError) failures.current = 99;
     } finally {
       setFetching(false);
     }
@@ -133,7 +135,7 @@ export function useQueue(target: Target, intervalMs: number) {
 
     const loop = async () => {
       await poll();
-      if (cancelled || failures.current >= 99) return;
+      if (cancelled || fatal.current) return;
       const backoff = Math.min(2 ** failures.current, 8);
       timer = setTimeout(loop, intervalMs * backoff);
     };
@@ -148,5 +150,7 @@ export function useQueue(target: Target, intervalMs: number) {
 
   const refresh = useCallback(() => setNonce((n) => n + 1), []);
 
-  return { queue, checks, events, error, fetching, updatedAt, refresh };
+  const viewer = target.as ?? queue?.viewer ?? "";
+
+  return { queue, viewer, checks, events, error, fetching, updatedAt, refresh };
 }

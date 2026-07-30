@@ -1,7 +1,7 @@
 import { execFile, execFileSync } from "node:child_process";
+import { BEL, ESC } from "./link.js";
 
-const ESC = String.fromCharCode(27);
-const BEL = String.fromCharCode(7);
+export type Method = "escape" | "terminal-notifier" | "osascript" | "none";
 
 const OSC_777_TERMINALS = new Set(["WarpTerminal", "WezTerm", "ghostty"]);
 
@@ -21,39 +21,46 @@ function resolveNotifier(): string | null {
   }
 }
 
-const escapes = supportsEscapeNotifications();
-const notifier = escapes ? null : resolveNotifier();
+const CHANNELS: Record<Exclude<Method, "none">, (title: string, body: string) => void> = {
+  escape(title, body) {
+    const clean = (value: string) => value.replace(/[;\r\n]/g, " ").trim();
+    process.stdout.write(`${ESC}]777;notify;${clean(title)};${clean(body)}${BEL}`);
+  },
+  "terminal-notifier"(title, body) {
+    execFile(notifier!, ["-title", title, "-message", body, "-sound", "Ping"]);
+  },
+  osascript(title, body) {
+    const clean = (value: string) => value.replace(/["\\]/g, "\\$&");
+    execFile("osascript", [
+      "-e",
+      `display notification "${clean(body)}" with title "${clean(title)}" sound name "Ping"`,
+    ]);
+  },
+};
 
-export const method: "escape" | "terminal-notifier" | "osascript" | "none" = escapes
-  ? "escape"
-  : notifier
-    ? "terminal-notifier"
-    : process.platform === "darwin"
-      ? "osascript"
-      : "none";
+let notifier: string | null = null;
+let resolved: Method | null = null;
 
-function clean(value: string): string {
-  return value.replace(/[;\r\n]/g, " ").trim();
+export function method(): Method {
+  if (resolved) return resolved;
+
+  if (supportsEscapeNotifications()) {
+    resolved = "escape";
+  } else {
+    notifier = resolveNotifier();
+    resolved = notifier
+      ? "terminal-notifier"
+      : process.platform === "darwin"
+        ? "osascript"
+        : "none";
+  }
+
+  return resolved;
 }
 
 export function notify(title: string, body: string): void {
   if (process.env.MERGEQ_NOTIFY === "off") return;
-
-  if (escapes) {
-    process.stdout.write(`${ESC}]777;notify;${clean(title)};${clean(body)}${BEL}`);
-    return;
-  }
-
-  if (notifier) {
-    execFile(notifier, ["-title", title, "-message", body, "-sound", "Ping"]);
-    return;
-  }
-
-  if (process.platform !== "darwin") return;
-
-  const escape = (value: string) => value.replace(/["\\]/g, "\\$&");
-  execFile("osascript", [
-    "-e",
-    `display notification "${escape(body)}" with title "${escape(title)}" sound name "Ping"`,
-  ]);
+  const channel = method();
+  if (channel === "none") return;
+  CHANNELS[channel](title, body);
 }

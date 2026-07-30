@@ -42,46 +42,36 @@ export async function resolveToken(): Promise<string> {
   return token;
 }
 
-export async function resolveRepo(): Promise<{ owner: string; name: string }> {
+export type Repo = { owner: string; name: string; defaultBranch: string };
+
+export async function resolveRepo(spec?: string): Promise<Repo> {
   const raw = await gh([
     "repo",
     "view",
+    ...(spec ? [spec] : []),
     "--json",
-    "nameWithOwner",
+    "nameWithOwner,defaultBranchRef",
     "--jq",
-    ".nameWithOwner",
+    '"\\(.nameWithOwner)\\t\\(.defaultBranchRef.name)"',
   ]).catch(() => "");
 
-  const [owner, name] = raw.split("/");
-  if (owner && name) return { owner, name };
+  const [nameWithOwner = "", branch = ""] = raw.split("\t");
+  const [owner, name] = nameWithOwner.split("/");
+  if (owner && name) return { owner, name, defaultBranch: branch || "main" };
+
+  if (spec) {
+    throw new SetupError(`Cannot see ${spec}.`, [
+      "check the name, or that your token can read it",
+      "gh auth refresh -h github.com -s repo",
+    ]);
+  }
 
   const inGitRepo = await run("git", ["rev-parse", "--is-inside-work-tree"])
     .then(() => true)
     .catch(() => false);
 
   throw new SetupError(
-    inGitRepo
-      ? "This git repository has no GitHub remote."
-      : "Not inside a git repository.",
-    [
-      "mergeq --repo owner/name",
-      "or export MERGEQ_REPO=owner/name to set a default",
-    ],
+    inGitRepo ? "This git repository has no GitHub remote." : "Not inside a git repository.",
+    ["mergeq --repo owner/name", "or export MERGEQ_REPO=owner/name to set a default"],
   );
-}
-
-export async function resolveDefaultBranch(
-  owner: string,
-  name: string,
-): Promise<string> {
-  const branch = await gh([
-    "repo",
-    "view",
-    `${owner}/${name}`,
-    "--json",
-    "defaultBranchRef",
-    "--jq",
-    ".defaultBranchRef.name",
-  ]).catch(() => "");
-  return branch || "main";
 }

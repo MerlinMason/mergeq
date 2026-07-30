@@ -1,5 +1,7 @@
-const ESC = String.fromCharCode(27);
-const BEL = String.fromCharCode(7);
+import { execFile } from "node:child_process";
+
+export const ESC = String.fromCharCode(27);
+export const BEL = String.fromCharCode(7);
 
 const supported = Boolean(process.stdout.isTTY) && process.env.TERM !== "dumb";
 
@@ -10,4 +12,8 @@ export function link(text: string, url: string): string {
 
 export function pullRequestUrl(owner: string, name: string, number: number): string {
   return `https://github.com/${owner}/${name}/pull/${number}`;
+}
+
+export function openUrl(url: string): void {
+  execFile("open", [url]);
 }

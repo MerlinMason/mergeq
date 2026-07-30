@@ -1,14 +1,15 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Box, Text, useApp, useInput, useStdout } from "ink";
-import { execFile } from "node:child_process";
+import { Box, Spacer, Text, useAnimation, useApp, useInput, useWindowSize } from "ink";
 import { useQueue, type Event, type Target } from "./useQueue.js";
 import { usePoll } from "./usePoll.js";
 import { method, notify } from "./notify.js";
 import { SetupError } from "./auth.js";
-import { link, pullRequestUrl } from "./link.js";
+import { link, openUrl, pullRequestUrl } from "./link.js";
 import {
   fetchOutcomes,
   fetchRate,
+  outcomeKey,
+  RECENT_LIMIT,
   type Checks,
   type Entry,
   type EntryState,
@@ -26,6 +27,13 @@ const STATES: Record<EntryState, { glyph: string; color: string; label: string }
 
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
+const NO_OUTCOMES: Outcome[] = [];
+
+function Spinner({ color }: { color: string }) {
+  const { frame } = useAnimation({ interval: 80 });
+  return <Text color={color}>{SPINNER[frame % SPINNER.length]}</Text>;
+}
+
 const REASONS: Record<string, { emoji: string; label: string }> = {
   merged: { emoji: "🚀", label: "shipped" },
   failed_checks: { emoji: "💥", label: "checks blew up" },
@@ -37,7 +45,7 @@ const REASONS: Record<string, { emoji: string; label: string }> = {
 };
 
 function reasonOf(reason: string): { emoji: string; label: string } {
-  return REASONS[reason.replace(/ /g, "_")] ?? { emoji: "😭", label: reason };
+  return REASONS[reason] ?? { emoji: "😭", label: reason.replace(/_/g, " ") };
 }
 
 function busyness(depth: number): { emoji: string; label: string; color: string } {
@@ -52,29 +60,6 @@ const NOTHING_QUEUED = [
   "✨ nothing of yours in the queue — make something magic",
   "👑 nothing of yours in the queue — crank up the slay",
 ];
-
-function useWidth(): number {
-  const { stdout } = useStdout();
-  const [, bump] = useState(0);
-  useEffect(() => {
-    const onResize = () => bump((value) => value + 1);
-    stdout.on("resize", onResize);
-    return () => {
-      stdout.off("resize", onResize);
-    };
-  }, [stdout]);
-  return stdout.columns || 100;
-}
-
-function useSpinner(active: boolean): string {
-  const [frame, setFrame] = useState(0);
-  useEffect(() => {
-    if (!active) return;
-    const id = setInterval(() => setFrame((f) => f + 1), 80);
-    return () => clearInterval(id);
-  }, [active]);
-  return SPINNER[frame % SPINNER.length] ?? SPINNER[0]!;
-}
 
 function ago(from: Date, now: number): string {
   const seconds = Math.max(0, Math.round((now - from.getTime()) / 1000));
@@ -92,10 +77,12 @@ function minutes(value: number | null): string {
   return `${hours}h${Math.round(value % 60)}m`;
 }
 
-function bar(done: number, total: number, width = 10): string {
-  if (total === 0) return "░".repeat(width);
-  const filled = Math.round((done / total) * width);
-  return "▓".repeat(filled) + "░".repeat(Math.max(0, width - filled));
+const BAR_WIDTH = 10;
+
+function bar(done: number, total: number): string {
+  if (total === 0) return "░".repeat(BAR_WIDTH);
+  const filled = Math.round((done / total) * BAR_WIDTH);
+  return "▓".repeat(filled) + "░".repeat(Math.max(0, BAR_WIDTH - filled));
 }
 
 function eta(position: number, rate: Rate | null, fallback: number | null): number | null {
@@ -103,7 +90,7 @@ function eta(position: number, rate: Rate | null, fallback: number | null): numb
   return fallback === null ? null : fallback / 60;
 }
 
-export function Section({ title }: { title: string }) {
+function Section({ title }: { title: string }) {
   return (
     <Box marginTop={1}>
       <Text color="gray" dimColor bold>
@@ -113,7 +100,7 @@ export function Section({ title }: { title: string }) {
   );
 }
 
-export function Ahead({
+function Ahead({
   count,
   rate,
   width,
@@ -142,12 +129,11 @@ export function Ahead({
   );
 }
 
-export function Mine({
+function Mine({
   entry,
   checks,
   rate,
   building,
-  spinner,
   repo,
   here,
   now,
@@ -156,7 +142,6 @@ export function Mine({
   checks: Checks | undefined;
   rate: Rate | null;
   building: boolean;
-  spinner: string;
   repo: { owner: string; name: string };
   here: boolean;
   now: number;
@@ -167,7 +152,6 @@ export function Mine({
   const waiting = ago(new Date(entry.enqueuedAt), now);
 
   const accent = first ? "green" : building ? "cyan" : "white";
-  const icon = first ? "▶" : building ? spinner : state.glyph;
 
   return (
     <Box flexDirection="column">
@@ -178,7 +162,13 @@ export function Mine({
           </Text>
         </Box>
         <Box width={2} flexShrink={0}>
-          <Text color={first ? "green" : state.color}>{icon}</Text>
+          {first ? (
+            <Text color="green">▶</Text>
+          ) : building ? (
+            <Spinner color="cyan" />
+          ) : (
+            <Text color={state.color}>{state.glyph}</Text>
+          )}
         </Box>
         <Box width={8} flexShrink={0}>
           <Text color={accent} bold underline={here}>
@@ -229,7 +219,7 @@ export function Mine({
         ) : (
           <Text color="gray">{state.label}</Text>
         )}
-        <Box flexGrow={1} />
+        <Spacer />
         <Text color="gray" dimColor>
           waited {waiting} ·{" "}
         </Text>
@@ -247,19 +237,19 @@ function Recently({
 }: {
   outcomes: Outcome[];
   repo: { owner: string; name: string };
-  selected: number;
+  selected: Outcome | null;
   now: number;
 }) {
   if (outcomes.length === 0) return null;
   return (
     <Box flexDirection="column">
       <Section title="RECENTLY" />
-      {outcomes.slice(0, 6).map((outcome, index) => {
+      {outcomes.map((outcome) => {
         const merged = outcome.kind === "merged";
-        const reason = reasonOf(merged ? "merged" : outcome.reason);
-        const here = index === selected;
+        const reason = reasonOf(outcome.reason);
+        const here = outcome === selected;
         return (
-          <Box key={`${outcome.number}-${outcome.at.getTime()}`}>
+          <Box key={outcomeKey(outcome)}>
             <Box width={4} flexShrink={0}>
               <Text color="cyan" bold>
                 {here ? "▸" : " "}
@@ -402,59 +392,65 @@ function Events({ events, now }: { events: Event[]; now: number }) {
   );
 }
 
+function Badge() {
+  return (
+    <Text backgroundColor="cyan" color="black" bold>
+      {" mergeq "}
+    </Text>
+  );
+}
+
 export default function App({
   target,
   interval,
   all,
-  as,
 }: {
   target: Target;
   interval: number;
   all: boolean;
-  as?: string;
 }) {
   const { exit } = useApp();
-  const width = useWidth();
-  const { queue, checks, events, error, fetching, updatedAt, refresh } = useQueue(
+  const { columns: width } = useWindowSize();
+  const { queue, viewer, checks, events, error, fetching, updatedAt, refresh } = useQueue(
     target,
     interval,
   );
-  const spinner = useSpinner(true);
   const [now, setNow] = useState(Date.now());
   const [showAll, setShowAll] = useState(all);
   const [selection, setSelection] = useState(0);
 
-  const viewer = as ?? queue?.viewer ?? "";
-
   const loadOutcomes = useCallback(
-    () => (viewer ? fetchOutcomes({ ...target, login: viewer }) : Promise.resolve([])),
+    () => fetchOutcomes({ ...target, login: viewer }),
     [target, viewer],
   );
   const loadRate = useCallback(() => fetchRate(target), [target]);
 
-  const outcomes = usePoll(viewer ? loadOutcomes : null, 60_000) ?? [];
+  const outcomes = usePoll(viewer ? loadOutcomes : null, 60_000) ?? NO_OUTCOMES;
   const rate = usePoll(loadRate, 300_000);
 
   const seen = useRef<Set<string> | null>(null);
 
   useEffect(() => {
     if (outcomes.length === 0) return;
-    const keys = outcomes.map((o) => `${o.number}-${o.at.getTime()}`);
 
     if (seen.current === null) {
-      seen.current = new Set(keys);
+      seen.current = new Set(outcomes.map(outcomeKey));
       return;
     }
 
     for (const outcome of outcomes) {
-      const key = `${outcome.number}-${outcome.at.getTime()}`;
+      const key = outcomeKey(outcome);
       if (seen.current.has(key)) continue;
       seen.current.add(key);
+
+      const reason = reasonOf(outcome.reason);
       if (outcome.kind === "merged") {
         notify(`🚀 #${outcome.number} shipped`, outcome.title);
       } else {
-        const reason = reasonOf(outcome.reason);
-        notify(`${reason.emoji} #${outcome.number} out of the queue`, `${reason.label} — ${outcome.title}`);
+        notify(
+          `${reason.emoji} #${outcome.number} out of the queue`,
+          `${reason.label} — ${outcome.title}`,
+        );
       }
     }
   }, [outcomes]);
@@ -464,18 +460,22 @@ export default function App({
     return () => clearInterval(id);
   }, []);
 
-  const repo = { owner: target.owner, name: target.name };
   const stale = updatedAt !== null && now - updatedAt.getTime() > 30_000;
   const entries = queue?.entries ?? [];
   const mine = entries.filter((entry) => entry.pullRequest.author?.login === viewer);
   const buildWindow = queue?.maximumEntriesToBuild ?? 0;
   const busy = busyness(queue?.totalCount ?? 0);
 
-  const selectable = [
-    ...mine.map((entry) => entry.pullRequest.number),
-    ...outcomes.slice(0, 6).map((outcome) => outcome.number),
+  const selectable: { number: number; outcome: Outcome | null }[] = [
+    ...mine.map((entry) => ({ number: entry.pullRequest.number, outcome: null })),
+    ...outcomes.map((outcome) => ({ number: outcome.number, outcome })),
   ];
-  const cursor = selectable.length === 0 ? -1 : Math.min(selection, selectable.length - 1);
+  const selected =
+    selectable.length === 0
+      ? null
+      : selectable[Math.min(selection, selectable.length - 1)]!;
+  const selectedEntry = selected?.outcome === null ? selected.number : null;
+  const selectedOutcome = selected?.outcome ?? null;
 
   useInput((input, key) => {
     if (input === "q" || key.escape || (key.ctrl && input === "c")) exit();
@@ -483,20 +483,16 @@ export default function App({
     if (input === "a") setShowAll((value) => !value);
     if (input === "j" || key.downArrow) setSelection((value) => value + 1);
     if (input === "k" || key.upArrow) setSelection((value) => Math.max(0, value - 1));
-    if (key.return && cursor >= 0) {
-      execFile("open", [pullRequestUrl(repo.owner, repo.name, selectable[cursor]!)]);
-    }
-    if (input === "o" && queue) execFile("open", [queue.url]);
-    if (input === "n") notify("mergeq 🚀", `notifications are working, via ${method}`);
+    if (key.return && selected) openUrl(pullRequestUrl(target.owner, target.name, selected.number));
+    if (input === "o" && queue) openUrl(queue.url);
+    if (input === "n") notify("mergeq 🚀", `notifications are working, via ${method()}`);
   });
 
   if (error instanceof SetupError) {
     return (
       <Box flexDirection="column" paddingX={1}>
         <Box>
-          <Text backgroundColor="cyan" color="black" bold>
-            {" mergeq "}
-          </Text>
+          <Badge />
         </Box>
         <Box flexDirection="column" marginTop={1}>
           <Text color="red">✗ {error.message}</Text>
@@ -518,27 +514,27 @@ export default function App({
     walked = entry.position;
   }
 
+  const hints = `↑↓ pick · ⏎ open · ${showAll ? "a mine" : "a all"} · n test · r refresh · q quit`;
+  const repoLabel = ` mergeq ${target.owner}/${target.name} → ${target.branch}`;
+
   return (
     <Box flexDirection="column" paddingX={1}>
       <Box>
-        <Text backgroundColor="cyan" color="black" bold>
-          {" mergeq "}
-        </Text>
+        <Badge />
         <Text> </Text>
         <Text bold>
           {target.owner}/{target.name}
         </Text>
         <Text color="gray"> → {target.branch}</Text>
-        <Box flexGrow={1} />
+        <Spacer />
         <Text color="gray" dimColor>
-          {width >= 96
-            ? `↑↓ pick · ⏎ open · ${showAll ? "a mine" : "a all"} · n test · r refresh · q quit`
-            : ""}
+          {width >= hints.length + repoLabel.length + 6 ? hints : ""}
         </Text>
       </Box>
 
       <Box marginTop={1}>
-        <Text color={fetching ? "cyan" : "gray"}>{fetching ? spinner : "·"} </Text>
+        {fetching ? <Spinner color="cyan" /> : <Text color="gray">·</Text>}
+        <Text> </Text>
         {queue ? (
           <Text>
             <Text bold>{queue.totalCount}</Text>
@@ -556,7 +552,7 @@ export default function App({
         ) : (
           <Text color="gray">connecting…</Text>
         )}
-        <Box flexGrow={1} />
+        <Spacer />
         {error ? <Text color="red">retrying…</Text> : null}
         {!error && stale ? (
           <Text color="yellow" dimColor>
@@ -577,7 +573,7 @@ export default function App({
               <AllRow
                 entry={entry}
                 mine={entry.pullRequest.author?.login === viewer}
-                repo={repo}
+                repo={target}
                 now={now}
               />
             </React.Fragment>
@@ -588,7 +584,7 @@ export default function App({
           {mine.length > 0 ? (
             <Box flexDirection="column">
               <Section title="YOURS" />
-              {groups.map(({ ahead, entry }, index) => (
+              {groups.map(({ ahead, entry }) => (
                 <React.Fragment key={entry.pullRequest.number}>
                   {ahead > 0 ? <Ahead count={ahead} rate={rate} width={width} /> : null}
                   <Mine
@@ -596,9 +592,8 @@ export default function App({
                     checks={entry.headCommit ? checks.get(entry.headCommit.oid) : undefined}
                     rate={rate}
                     building={entry.position <= buildWindow}
-                    spinner={spinner}
-                    repo={repo}
-                    here={cursor === index}
+                    repo={target}
+                    here={entry.pullRequest.number === selectedEntry}
                     now={now}
                   />
                 </React.Fragment>
@@ -608,12 +603,7 @@ export default function App({
             <Empty depth={queue.totalCount} rate={rate} outcomes={outcomes} now={now} />
           ) : null}
 
-          <Recently
-            outcomes={outcomes}
-            repo={repo}
-            selected={cursor - mine.length}
-            now={now}
-          />
+          <Recently outcomes={outcomes} repo={target} selected={selectedOutcome} now={now} />
           {mine.length > 0 ? <Events events={events} now={now} /> : null}
         </>
       )}

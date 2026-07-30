@@ -12,9 +12,6 @@ export type Entry = {
   state: EntryState;
   enqueuedAt: string;
   estimatedTimeToMerge: number | null;
-  jump: boolean;
-  solo: boolean;
-  enqueuer: { login: string } | null;
   headCommit: { oid: string } | null;
   pullRequest: {
     number: number;
@@ -45,9 +42,6 @@ query($owner:String!,$name:String!,$branch:String!){
           state
           enqueuedAt
           estimatedTimeToMerge
-          jump
-          solo
-          enqueuer{ login }
           headCommit{ oid }
           pullRequest{ number title author{ login } }
         }
@@ -56,18 +50,15 @@ query($owner:String!,$name:String!,$branch:String!){
   }
 }`;
 
-type Response = {
-  data?: {
-    viewer: { login: string } | null;
-    repository: {
-      mergeQueue: {
-        url: string;
-        configuration: { maximumEntriesToBuild: number | null } | null;
-        entries: { totalCount: number; nodes: (Entry | null)[] };
-      } | null;
+type QueueData = {
+  viewer: { login: string } | null;
+  repository: {
+    mergeQueue: {
+      url: string;
+      configuration: { maximumEntriesToBuild: number | null } | null;
+      entries: { totalCount: number; nodes: (Entry | null)[] };
     } | null;
-  };
-  errors?: { message: string; type?: string }[];
+  } | null;
 };
 
 export type Checks = {
@@ -89,12 +80,33 @@ export type Outcome = {
 export type Rate = {
   gapMinutes: number;
   spanHours: number;
-  samples: number;
 };
 
-async function graphql<T>(token: string, query: string, variables: object): Promise<T> {
+export const RECENT_LIMIT = 6;
+
+export function outcomeKey(outcome: Outcome): string {
+  return `${outcome.number}-${outcome.at.getTime()}`;
+}
+
+class HttpError extends Error {
+  constructor(
+    readonly status: number,
+    readonly sso: boolean,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+async function graphql<T>(
+  token: string,
+  query: string,
+  variables: object,
+  signal?: AbortSignal,
+): Promise<T> {
   const res = await fetch("https://api.github.com/graphql", {
     method: "POST",
+    signal,
     headers: {
       authorization: `bearer ${token}`,
       "content-type": "application/json",
@@ -102,7 +114,15 @@ async function graphql<T>(token: string, query: string, variables: object): Prom
     },
     body: JSON.stringify({ query, variables }),
   });
-  if (!res.ok) throw new Error(`GitHub returned ${res.status} ${res.statusText}`);
+
+  if (!res.ok) {
+    throw new HttpError(
+      res.status,
+      Boolean(res.headers.get("x-github-sso")),
+      `GitHub returned ${res.status} ${res.statusText}`,
+    );
+  }
+
   const body = (await res.json()) as { data?: T; errors?: { message: string }[] };
   if (body.errors?.length) throw new Error(body.errors.map((e) => e.message).join("; "));
   if (!body.data) throw new Error("GitHub returned no data");
@@ -184,17 +204,16 @@ export async function fetchOutcomes(opts: {
   type Node = {
     number: number;
     title: string;
-    mergedAt: string | null;
     added: { nodes: { createdAt: string }[] };
     removed: { nodes: { createdAt: string; reason: string | null }[] };
   };
 
   const data = await graphql<{ search: { nodes: Node[] } }>(
     opts.token,
-    `query($q:String!){ search(query:$q, type:ISSUE, first:25){ nodes{ ... on PullRequest {
-      number title mergedAt
-      added: timelineItems(last:5, itemTypes:[ADDED_TO_MERGE_QUEUE_EVENT]){ nodes{ ... on AddedToMergeQueueEvent { createdAt } } }
-      removed: timelineItems(last:5, itemTypes:[REMOVED_FROM_MERGE_QUEUE_EVENT]){ nodes{ ... on RemovedFromMergeQueueEvent { createdAt reason } } }
+    `query($q:String!){ search(query:$q, type:ISSUE, first:15){ nodes{ ... on PullRequest {
+      number title
+      added: timelineItems(last:3, itemTypes:[ADDED_TO_MERGE_QUEUE_EVENT]){ nodes{ ... on AddedToMergeQueueEvent { createdAt } } }
+      removed: timelineItems(last:3, itemTypes:[REMOVED_FROM_MERGE_QUEUE_EVENT]){ nodes{ ... on RemovedFromMergeQueueEvent { createdAt reason } } }
     }}}}`,
     {
       q: `repo:${opts.owner}/${opts.name} author:${opts.login} is:pr sort:updated-desc`,
@@ -204,28 +223,27 @@ export async function fetchOutcomes(opts: {
   const outcomes: Outcome[] = [];
 
   for (const node of data.search.nodes) {
+    const enqueued = node.added.nodes.map((a) => new Date(a.createdAt).getTime());
+
     for (const removal of node.removed.nodes) {
       const at = new Date(removal.createdAt);
-      const merged = removal.reason === "merged";
-      const priorAdd = node.added.nodes
-        .map((a) => new Date(a.createdAt))
-        .filter((a) => a.getTime() <= at.getTime())
-        .pop();
+      const priorAdd = enqueued.filter((time) => time <= at.getTime()).pop();
 
       outcomes.push({
         number: node.number,
         title: node.title,
-        kind: merged ? "merged" : "ejected",
-        reason: (removal.reason ?? "removed").replace(/_/g, " "),
+        kind: removal.reason === "merged" ? "merged" : "ejected",
+        reason: removal.reason ?? "removed",
         at,
-        queuedMinutes: priorAdd
-          ? Math.max(0, Math.round((at.getTime() - priorAdd.getTime()) / 60000))
-          : null,
+        queuedMinutes:
+          priorAdd === undefined
+            ? null
+            : Math.max(0, Math.round((at.getTime() - priorAdd) / 60000)),
       });
     }
   }
 
-  return outcomes.sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, 12);
+  return outcomes.sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, RECENT_LIMIT);
 }
 
 export async function fetchRate(opts: {
@@ -252,7 +270,6 @@ export async function fetchRate(opts: {
   return {
     gapMinutes: spanMs / 60000 / times.length,
     spanHours: spanMs / 3600000,
-    samples: times.length,
   };
 }
 
@@ -263,54 +280,33 @@ export async function fetchQueue(opts: {
   branch: string;
   signal?: AbortSignal;
 }): Promise<Queue> {
-  const res = await fetch("https://api.github.com/graphql", {
-    method: "POST",
-    signal: opts.signal,
-    headers: {
-      authorization: `bearer ${opts.token}`,
-      "content-type": "application/json",
-      "user-agent": "mergeq",
-    },
-    body: JSON.stringify({
-      query: QUERY,
-      variables: { owner: opts.owner, name: opts.name, branch: opts.branch },
-    }),
+  const data = await graphql<QueueData>(
+    opts.token,
+    QUERY,
+    { owner: opts.owner, name: opts.name, branch: opts.branch },
+    opts.signal,
+  ).catch((caught: unknown) => {
+    if (!(caught instanceof HttpError)) throw caught;
+
+    if (caught.status === 401) {
+      throw new SetupError("GitHub rejected the token.", ["gh auth login", "gh auth status"]);
+    }
+
+    if (caught.status === 403) {
+      throw new SetupError(
+        caught.sso
+          ? "Token needs SSO authorisation for this organisation."
+          : "GitHub returned 403 (rate limited, or missing scopes).",
+        caught.sso
+          ? ["Authorise it at https://github.com/settings/tokens"]
+          : ["gh auth refresh -h github.com -s repo"],
+      );
+    }
+
+    throw caught;
   });
 
-  if (res.status === 401) {
-    throw new SetupError("GitHub rejected the token.", [
-      "gh auth login",
-      "gh auth status",
-    ]);
-  }
-
-  if (res.status === 403) {
-    const sso = res.headers.get("x-github-sso");
-    throw new SetupError(
-      sso
-        ? "Token needs SSO authorisation for this organisation."
-        : "GitHub returned 403 (rate limited, or missing scopes).",
-      sso
-        ? ["Authorise it at https://github.com/settings/tokens"]
-        : ["gh auth refresh -h github.com -s repo"],
-    );
-  }
-
-  if (!res.ok) {
-    throw new Error(`GitHub returned ${res.status} ${res.statusText}`);
-  }
-
-  const body = (await res.json()) as Response;
-
-  if (body.errors?.length) {
-    const saml = body.errors.find((e) => e.type === "FORBIDDEN");
-    throw new SetupError(
-      body.errors.map((e) => e.message).join("; "),
-      saml ? ["gh auth login", "then authorise SSO for the org"] : [],
-    );
-  }
-
-  const repo = body.data?.repository;
+  const repo = data.repository;
   if (!repo) {
     throw new SetupError(
       `Cannot see ${opts.owner}/${opts.name} — it may be private or need SSO.`,
@@ -331,6 +327,6 @@ export async function fetchQueue(opts: {
     maximumEntriesToBuild: queue.configuration?.maximumEntriesToBuild ?? null,
     totalCount: queue.entries.totalCount,
     entries: queue.entries.nodes.filter((n): n is Entry => n !== null),
-    viewer: body.data?.viewer?.login ?? "",
+    viewer: data.viewer?.login ?? "",
   };
 }
