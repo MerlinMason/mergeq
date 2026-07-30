@@ -302,12 +302,12 @@ function AllRow({
   entry,
   mine,
   repo,
-  now,
+  rate,
 }: {
   entry: Entry;
   mine: boolean;
   repo: { owner: string; name: string };
-  now: number;
+  rate: Rate | null;
 }) {
   const state = STATES[entry.state];
   const author = entry.pullRequest.author?.login ?? "unknown";
@@ -339,8 +339,10 @@ function AllRow({
           {author}
         </Text>
       </Box>
-      <Box width={4} flexShrink={0}>
-        <Text color="gray">{ago(new Date(entry.enqueuedAt), now)}</Text>
+      <Box width={11} flexShrink={0}>
+        <Text dimColor>
+          🚀 in ~{minutes(eta(entry.position, rate, entry.estimatedTimeToMerge))}
+        </Text>
       </Box>
     </Box>
   );
@@ -601,7 +603,7 @@ export default function App({
                 entry={entry}
                 mine={entry.pullRequest.author?.login === viewer}
                 repo={target}
-                now={now}
+                rate={rate}
               />
             </React.Fragment>
             ))
