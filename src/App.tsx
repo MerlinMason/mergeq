@@ -279,7 +279,7 @@ function Empty({ outcomes, now }: { outcomes: Outcome[]; now: number }) {
   );
   return (
     <>
-      <Text color="greenBright">{greeting}</Text>
+      <Text color="white">{greeting}</Text>
       {lastMerge ? (
         <Text color="gray" dimColor>
           You last shipped #{lastMerge.number} · {ago(lastMerge.at, now)} ago
@@ -513,8 +513,10 @@ export default function App({
         </Text>
         <Spacer />
         <Text color="gray" dimColor>
-          {width >= hints.length + repoLabel.length + 6 ? hints : ""}
+          {width >= hints.length + repoLabel.length + 8 ? hints : ""}
         </Text>
+        <Text> </Text>
+        {fetching ? <Spinner color="cyan" /> : <Text> </Text>}
       </Box>
 
       <Gradient name={BRAND}>
@@ -523,8 +525,6 @@ export default function App({
 
       <Panel title="QUEUE">
         <Box>
-          {fetching ? <Spinner color="cyan" /> : <Text color="gray">·</Text>}
-          <Text> </Text>
           {queue ? (
             <Text>
               <Text bold color="whiteBright">
@@ -557,7 +557,9 @@ export default function App({
           ) : null}
         </Box>
 
-        <Text color="gray">{"─".repeat(Math.max(10, width - PANEL_CHROME))}</Text>
+        <Box marginY={1}>
+          <Text color="gray">{"─".repeat(Math.max(10, width - PANEL_CHROME))}</Text>
+        </Box>
 
         {showAll ? (
           entries.map((entry, index) => (
