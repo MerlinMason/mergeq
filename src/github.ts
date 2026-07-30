@@ -74,7 +74,6 @@ export type Outcome = {
   kind: "merged" | "ejected";
   reason: string;
   at: Date;
-  queuedMinutes: number | null;
 };
 
 export type Rate = {
@@ -204,7 +203,6 @@ export async function fetchOutcomes(opts: {
   type Node = {
     number: number;
     title: string;
-    added: { nodes: { createdAt: string }[] };
     removed: { nodes: { createdAt: string; reason: string | null }[] };
   };
 
@@ -212,7 +210,6 @@ export async function fetchOutcomes(opts: {
     opts.token,
     `query($q:String!){ search(query:$q, type:ISSUE, first:15){ nodes{ ... on PullRequest {
       number title
-      added: timelineItems(last:3, itemTypes:[ADDED_TO_MERGE_QUEUE_EVENT]){ nodes{ ... on AddedToMergeQueueEvent { createdAt } } }
       removed: timelineItems(last:3, itemTypes:[REMOVED_FROM_MERGE_QUEUE_EVENT]){ nodes{ ... on RemovedFromMergeQueueEvent { createdAt reason } } }
     }}}}`,
     {
@@ -223,22 +220,13 @@ export async function fetchOutcomes(opts: {
   const outcomes: Outcome[] = [];
 
   for (const node of data.search.nodes) {
-    const enqueued = node.added.nodes.map((a) => new Date(a.createdAt).getTime());
-
     for (const removal of node.removed.nodes) {
-      const at = new Date(removal.createdAt);
-      const priorAdd = enqueued.filter((time) => time <= at.getTime()).pop();
-
       outcomes.push({
         number: node.number,
         title: node.title,
         kind: removal.reason === "merged" ? "merged" : "ejected",
         reason: removal.reason ?? "removed",
-        at,
-        queuedMinutes:
-          priorAdd === undefined
-            ? null
-            : Math.max(0, Math.round((at.getTime() - priorAdd) / 60000)),
+        at: new Date(removal.createdAt),
       });
     }
   }

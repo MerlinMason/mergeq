@@ -54,7 +54,7 @@ function busyness(depth: number): { emoji: string; label: string; color: string 
   if (depth === 0) return { emoji: "🌙", label: "dead quiet", color: "green" };
   if (depth <= 4) return { emoji: "🍃", label: "ticking over", color: "green" };
   if (depth <= 9) return { emoji: "🚦", label: "getting spicy", color: "yellow" };
-  return { emoji: "🔥", label: "absolute carnage", color: "red" };
+  return { emoji: "🌋", label: "absolute carnage", color: "red" };
 }
 
 const NOTHING_QUEUED = [
@@ -256,17 +256,11 @@ function Recently({
                 {outcome.title}
               </Text>
             </Box>
-            <Box width={34} flexShrink={0} justifyContent="flex-end">
+            <Box width={26} flexShrink={0} justifyContent="flex-end">
               <Text color={merged ? "gray" : "red"} dimColor={merged} wrap="truncate">
                 {reason.emoji} {merged ? "" : `${reason.label} `}
                 {ago(outcome.at, now)} ago
               </Text>
-              {outcome.queuedMinutes !== null ? (
-                <Text color="gray" dimColor>
-                  {" "}
-                  · ⏳ {minutes(outcome.queuedMinutes)}
-                </Text>
-              ) : null}
             </Box>
           </Box>
         );
