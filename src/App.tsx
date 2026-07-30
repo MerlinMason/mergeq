@@ -251,20 +251,19 @@ function Recently({
                 {link(`#${outcome.number}`, pullRequestUrl(repo.owner, repo.name, outcome.number))}
               </Text>
             </Box>
-            <Box flexGrow={1} flexShrink={1} minWidth={0} marginRight={1}>
-              <Text wrap="truncate" color={here ? "white" : "gray"}>
+            <Box flexGrow={1} flexShrink={1} minWidth={0} marginRight={2}>
+              <Text wrap="truncate" color={here ? "whiteBright" : undefined} dimColor={!here}>
                 {outcome.title}
               </Text>
             </Box>
-            <Box width={25} flexShrink={0}>
+            <Box width={34} flexShrink={0} justifyContent="flex-end">
               <Text color={merged ? "green" : "red"} wrap="truncate">
                 {reason.emoji} {reason.label} {ago(outcome.at, now)} ago
               </Text>
-            </Box>
-            <Box width={14} flexShrink={0} justifyContent="flex-end">
               {outcome.queuedMinutes !== null ? (
-                <Text color="gray" dimColor wrap="truncate">
-                  ⏱️ {merged ? "in" : "after"} {minutes(outcome.queuedMinutes)}
+                <Text color="gray" dimColor>
+                  {" "}
+                  · ⏳ {minutes(outcome.queuedMinutes)}
                 </Text>
               ) : null}
             </Box>
@@ -275,41 +274,20 @@ function Recently({
   );
 }
 
-function Empty({
-  depth,
-  rate,
-  outcomes,
-  now,
-}: {
-  depth: number;
-  rate: Rate | null;
-  outcomes: Outcome[];
-  now: number;
-}) {
-  const busy = busyness(depth);
+function Empty({ outcomes, now }: { outcomes: Outcome[]; now: number }) {
   const lastMerge = outcomes.find((o) => o.kind === "merged");
   const [greeting] = useState(
     () => NOTHING_QUEUED[Math.floor(Math.random() * NOTHING_QUEUED.length)]!,
   );
   return (
-    <Box flexDirection="column" marginTop={1} marginLeft={3}>
-      <Text color="green">{greeting}</Text>
-      <Box marginTop={1}>
-        <Text color="gray">
-          {busy.emoji} the queue is <Text color={busy.color}>{busy.label}</Text>
-          <Text color="gray">
-            {" "}
-            — {depth} {depth === 1 ? "item" : "items"}
-            {rate ? `, merging every ~${minutes(rate.gapMinutes)}` : ""}
-          </Text>
-        </Text>
-      </Box>
+    <Panel title="YOURS">
+      <Text color="greenBright">{greeting}</Text>
       {lastMerge ? (
         <Text color="gray" dimColor>
-          you last shipped #{lastMerge.number} {ago(lastMerge.at, now)} ago 🚀
+          last shipped #{lastMerge.number} · {ago(lastMerge.at, now)} ago
         </Text>
       ) : null}
-    </Box>
+    </Panel>
   );
 }
 
@@ -520,7 +498,7 @@ export default function App({
     walked = entry.position;
   }
 
-  const hints = `↑↓ pick · ⏎ open · ${showAll ? "a mine" : "a all"} · n test · r refresh · q quit`;
+  const hints = `↑↓ pick · enter open · ${showAll ? "a mine" : "a all"} · n test · r refresh · q quit`;
   const repoLabel = ` mergeq ${target.owner}/${target.name} → ${target.branch}`;
 
   return (
@@ -538,19 +516,30 @@ export default function App({
         </Text>
       </Box>
 
-      <Box marginTop={1}>
+      <Gradient colors={["#22d3ee", "#a855f7"]}>
+        <Text dimColor>{"─".repeat(Math.max(10, width - 2))}</Text>
+      </Gradient>
+
+      <Box>
         {fetching ? <Spinner color="cyan" /> : <Text color="gray">·</Text>}
         <Text> </Text>
         {queue ? (
           <Text>
-            <Text bold>{queue.totalCount}</Text>
-            <Text color="gray"> in queue · </Text>
+            <Text bold color="whiteBright">
+              {queue.totalCount}
+            </Text>
+            <Text color="gray" dimColor>
+              {" "}
+              queued
+            </Text>
+            <Text color="gray" dimColor>
+              {"   "}
+            </Text>
             <Text>{busy.emoji} </Text>
             <Text color={busy.color}>{busy.label}</Text>
             {rate ? (
-              <Text color="gray">
-                {" "}
-                · merging every ~{minutes(rate.gapMinutes)}
+              <Text color="gray" dimColor>
+                {"   "}~{minutes(rate.gapMinutes)} between merges
                 {rate.spanHours > 6 ? " (rough)" : ""}
               </Text>
             ) : null}
@@ -605,7 +594,7 @@ export default function App({
               ))}
             </Panel>
           ) : queue ? (
-            <Empty depth={queue.totalCount} rate={rate} outcomes={outcomes} now={now} />
+            <Empty outcomes={outcomes} now={now} />
           ) : null}
 
           <Recently outcomes={outcomes} repo={target} selected={selectedOutcome} now={now} />
