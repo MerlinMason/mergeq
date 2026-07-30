@@ -78,8 +78,14 @@ Measured against the last 50 merges of incident-io/core, the queue actually
 merges one pull request every ~3.1 minutes, so that estimate runs about 1.8×
 optimistic.
 
-The estimate here is `position × observed gap`, where the gap comes from the
-timestamps of recent merges and so tracks the time of day.
+The estimate here is `position × observed gap`, where the gap is the median
+interval between recent merges — a median rather than an average so that one
+pull request merged long ago, dragged into the window by a later comment,
+cannot swallow it.
+
+The header applies the same estimate to a pull request you have not pushed yet:
+joining now means position `depth + 1`, so it answers "if I queue this, when
+does it land" rather than reporting a rate.
 
 ## Polling
 

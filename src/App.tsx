@@ -627,7 +627,8 @@ export default function App({
               <Text color={busy.color}>{busy.label}</Text>
               {rate ? (
                 <Text dimColor>
-                  {"   "}~{minutes(rate.gapMinutes)} between merges
+                  {"   "}join now · 🚀 in ~
+                  {minutes((queue.totalCount + 1) * rate.gapMinutes)}
                 </Text>
               ) : null}
             </Text>
