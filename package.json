@@ -1,26 +1,39 @@
 {
   "name": "mergeq",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
+  "description": "Watch a GitHub merge queue in your terminal",
+  "keywords": ["github", "merge-queue", "cli", "tui", "ink"],
+  "license": "MIT",
+  "author": "Merlin Mason <merlin.mason@incident.io>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MerlinMason/mergeq.git"
+  },
+  "homepage": "https://github.com/MerlinMason/mergeq#readme",
+  "bugs": "https://github.com/MerlinMason/mergeq/issues",
   "type": "module",
+  "bin": {
+    "mergeq": "dist/cli.js"
+  },
+  "files": ["dist/cli.js"],
   "engines": {
     "node": ">=22"
   },
   "scripts": {
     "dev": "bun run src/cli.tsx",
+    "bundle": "bun build src/cli.tsx --target node --outfile dist/cli.js --banner '#!/usr/bin/env node'",
     "build": "bun build --compile src/cli.tsx --outfile dist/mergeq",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "prepublishOnly": "bun run check && bun run bundle"
   },
-  "dependencies": {
+  "devDependencies": {
     "@mishieck/ink-titled-box": "^0.4.2",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.2.0",
     "ink": "^7.1.1",
     "ink-gradient": "^4.0.1",
     "react": "^19.2.0",
-    "react-devtools-core": "^6.1.2"
-  },
-  "devDependencies": {
-    "@types/node": "^22.0.0",
-    "@types/react": "^19.2.0",
+    "react-devtools-core": "^6.1.2",
     "typescript": "^5.6.0"
   }
 }
