@@ -177,7 +177,7 @@ function Mine({
   const first = entry.position === 1;
   const detail = first || (checks !== undefined && checks.total > 0);
 
-  const accent = first ? "green" : building ? "cyan" : undefined;
+  const accent = building ? "cyan" : undefined;
 
   return (
     <Box flexDirection="column">
@@ -205,7 +205,7 @@ function Mine({
           underline={here}
         />
         <Box flexGrow={1} flexShrink={1} minWidth={0} marginRight={1}>
-          <Text bold={first} color={first ? "green" : undefined} wrap="truncate">
+          <Text bold={first} wrap="truncate">
             {entry.pullRequest.title}
           </Text>
         </Box>
