@@ -4,7 +4,7 @@ import App, { KEY_HINTS } from "./App.js";
 import { resolveRepo, resolveToken, SetupError } from "./auth.js";
 
 const HELP = `
-  mergeq — watch a GitHub merge queue in your terminal
+  mergequeue — watch a GitHub merge queue in your terminal
 
   Usage
     $ mergeq [--repo owner/name] [--branch master] [--interval 5]

@@ -436,7 +436,12 @@ function Events({ events, now }: { events: Event[]; now: number }) {
 
 const BRAND = "fruit";
 
-const WORDMARK = ["┌┬┐┌─╴┌─┐┌─╴┌─╴┌─┐", "│││├╴ ├┬┘│╶┐├╴ │┐│", "╵ ╵└─╴╵└╴└─┘└─╴└┴┘"].join("\n");
+// figlet "Future Thin", frozen so the binary needs no font files at runtime
+const WORDMARK = [
+  "┌┬┐┌─╴┌─┐┌─╴┌─╴┌─┐╷ ╷┌─╴╷ ╷┌─╴",
+  "│││├╴ ├┬┘│╶┐├╴ │┐││ │├╴ │ │├╴ ",
+  "╵ ╵└─╴╵└╴└─┘└─╴└┴┘└─┘└─╴└─┘└─╴",
+].join("\n");
 
 const Wordmark = React.memo(function Wordmark() {
   return (
@@ -457,7 +462,7 @@ const Rule = React.memo(function Rule({ width }: { width: number }) {
 const Badge = React.memo(function Badge() {
   return (
     <Gradient name={BRAND}>
-      <Text bold>mergeq</Text>
+      <Text bold>mergequeue</Text>
     </Gradient>
   );
 });
