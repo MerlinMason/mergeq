@@ -28,36 +28,8 @@ If you keep it, install it once and the command is `mergeq` from then on:
 npm i -g @merlinmason/mergeq
 ```
 
-## What you are looking at
-
-**QUEUE** opens with the queue's depth, its temperature, and how long a pull
-request would take to merge if you pushed one right now.
-
-Below that are **your** pull requests. Everything ahead of them collapses into a
-`⋯ n ahead` divider carrying the wait those entries represent, so "how long
-until mine lands" is one glance rather than arithmetic. A pull request that has
-started building gains a second line: how many checks have finished and which
-one is running. Position one says so plainly.
-
-**YOUR RECENT** is what became of your pull requests after they left the queue —
-🔀 shipped, 💥 failed, 🥊 conflict, ✋ yanked — taken from GitHub's own record
-rather than guessed.
-
-Press `a` and both panels widen to the whole team: every entry in the queue, and
-everyone's recent outcomes with the author beside each.
-
-## Keys
-
-| | |
-|---|---|
-| `↑` `↓` or `k` `j` | move the selection |
-| `⏎` | open the selected pull request |
-| `a` | toggle between everyone's and yours |
-| `o` | open the queue itself on GitHub |
-| `q` | quit |
-
-Pull request numbers are hyperlinks too, so ⌘-click works in terminals that
-support them.
+The keys are listed under the title as you use it. Pull request numbers are also
+hyperlinks, so ⌘-click opens them where your terminal supports it.
 
 ## Options
 
