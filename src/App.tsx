@@ -70,6 +70,7 @@ const NOTHING_QUEUED = [
   "Nothing of yours in the queue — yassify something 💅",
   "Nothing of yours in the queue — make something magic ✨",
   "Nothing of yours in the queue — crank up the slay 👑",
+  "Nothing of yours in the queue — get ticket-maxxing 🚢",
 ];
 
 function ago(from: Date, now: number): string {
