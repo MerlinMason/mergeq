@@ -2,6 +2,9 @@
 
 Watch a GitHub merge queue in your terminal.
 
+<img width="833" height="412" alt="image" src="https://github.com/user-attachments/assets/89f42722-35ac-499a-a84f-36af8bcc8dba" />
+
+
 ## Before you start
 
 You need the [GitHub CLI](https://cli.github.com), logged in. mergequeue has no
