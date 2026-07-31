@@ -2,6 +2,22 @@
 
 Watch a GitHub merge queue in your terminal.
 
+## Before you start
+
+You need the [GitHub CLI](https://cli.github.com), logged in. mergequeue has no
+credentials of its own — it asks `gh` for a token and uses that, so if `gh`
+works, mergequeue works.
+
+```bash
+brew install gh   # if you do not have it
+gh auth login     # once
+```
+
+Node 22 or newer is also required, which `npx` will tell you about if you are
+short.
+
+## Running it
+
 ```bash
 cd ~/code/your-repo
 npx mergeq
@@ -99,9 +115,13 @@ Around 800 GraphQL points an hour against a 5,000 budget.
 
 ## Auth
 
-Borrowed from the GitHub CLI — run `gh auth login` once and you are done. Falls
-back to `$GH_TOKEN` / `$GITHUB_TOKEN` for CI. A missing login, missing `repo`
-scope or unauthorised SSO each print the command that fixes it.
+`gh auth token` supplies the credential, so there is nothing to configure and
+nothing stored. `$GH_TOKEN` or `$GITHUB_TOKEN` take precedence when set, which is
+how it runs in CI.
+
+A missing `gh`, a missing login, a token without `repo` scope and an
+organisation that needs SSO each fail with the command that fixes them, rather
+than a stack trace.
 
 ## Build a standalone binary
 
