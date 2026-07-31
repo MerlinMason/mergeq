@@ -67,7 +67,7 @@ support them.
 | `--branch name` | which queued branch, if not the default |
 | `--interval 5` | seconds between refreshes |
 | `--all` | start on the whole queue |
-| `--as login` | follow somebody else's pull requests |
+| `--as username` | treat somebody else's GitHub account as "yours" |
 
 `--repo` falls back to `$MERGEQ_REPO`, then to the current directory's
 repository, so `export MERGEQ_REPO=owner/name` saves repeating it.

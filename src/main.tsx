@@ -15,7 +15,7 @@ const HELP = `
     --branch    Queued branch (defaults to the repository's default branch)
     --interval  Seconds between polls (default 5)
     --all       Start on the full queue rather than just your pull requests
-    --as        Follow someone else's pull requests instead of your own
+    --as        A GitHub username to follow instead of your own
 
   Keys
     ${KEY_HINTS}
