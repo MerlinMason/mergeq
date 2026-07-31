@@ -62,7 +62,7 @@ function reasonOf(reason: string): { emoji: string; label: string } {
 function busyness(depth: number): { emoji: string; label: string; color: string } {
   if (depth <= 1) return { emoji: "🧊", label: "chill", color: "cyan" };
   if (depth <= 4) return { emoji: "🍳", label: "warming up", color: "green" };
-  if (depth <= 9) return { emoji: "🌶️", label: "getting spicy", color: "yellow" };
+  if (depth <= 9) return { emoji: "🥵", label: "getting spicy", color: "yellow" };
   return { emoji: "🔥", label: "absolute carnage", color: "red" };
 }
 
