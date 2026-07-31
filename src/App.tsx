@@ -175,6 +175,7 @@ function Mine({
 }) {
   const state = STATES[entry.state];
   const first = entry.position === 1;
+  const detail = first || (checks !== undefined && checks.total > 0);
 
   const accent = first ? "green" : building ? "cyan" : undefined;
 
@@ -211,42 +212,43 @@ function Mine({
         <Box width={7} flexShrink={0} justifyContent="flex-end">
           <Text color="gray">pos {entry.position}</Text>
         </Box>
+        <Box width={ETA_WIDTH} flexShrink={0} justifyContent="flex-end">
+          <Text color={first ? "green" : "cyan"}>{etaLabel(entry, rate)}</Text>
+        </Box>
       </Box>
 
-      <Box marginLeft={4}>
-        {first ? (
-          <Text color="green" bold>
-            🔀 you&apos;re up next{" "}
-          </Text>
-        ) : null}
-        {checks && checks.total > 0 ? (
-          <Text>
-            <Text color={checks.failing > 0 ? "red" : building ? "cyan" : "gray"}>
-              {bar(checks.done, checks.total)}
+      {detail ? (
+        <Box marginLeft={4}>
+          {first ? (
+            <Text color="green" bold>
+              🔀 you&apos;re up next{" "}
             </Text>
-            <Text color="gray">
-              {" "}
-              {checks.done}/{checks.total}
+          ) : null}
+          {checks && checks.total > 0 ? (
+            <Text>
+              <Text color={checks.failing > 0 ? "red" : building ? "cyan" : "gray"}>
+                {bar(checks.done, checks.total)}
+              </Text>
+              <Text color="gray">
+                {" "}
+                {checks.done}/{checks.total}
+              </Text>
+              {checks.failing > 0 ? (
+                <Text color="red" bold>
+                  {" "}
+                  {checks.failing} failing
+                </Text>
+              ) : null}
+              {checks.running ? (
+                <Text dimColor wrap="truncate">
+                  {" "}
+                  · {checks.running}
+                </Text>
+              ) : null}
             </Text>
-            {checks.failing > 0 ? (
-              <Text color="red" bold>
-                {" "}
-                {checks.failing} failing
-              </Text>
-            ) : null}
-            {checks.running ? (
-              <Text dimColor wrap="truncate">
-                {" "}
-                · {checks.running}
-              </Text>
-            ) : null}
-          </Text>
-        ) : (
-          <Text color="gray">{state.label}</Text>
-        )}
-        <Spacer />
-        <Text color={first ? "green" : "cyan"}>{etaLabel(entry, rate)}</Text>
-      </Box>
+          ) : null}
+        </Box>
+      ) : null}
     </Box>
   );
 }
