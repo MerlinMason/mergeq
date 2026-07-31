@@ -1,11 +1,17 @@
 {
   "name": "@merlinmason/mergeq",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publishConfig": {
     "access": "public"
   },
   "description": "Watch a GitHub merge queue in your terminal",
-  "keywords": ["github", "merge-queue", "cli", "tui", "ink"],
+  "keywords": [
+    "github",
+    "merge-queue",
+    "cli",
+    "tui",
+    "ink"
+  ],
   "license": "MIT",
   "author": "Merlin Mason <merlin.mason@incident.io>",
   "repository": {
@@ -18,7 +24,9 @@
   "bin": {
     "mergeq": "dist/cli.js"
   },
-  "files": ["dist/cli.js"],
+  "files": [
+    "dist/cli.js"
+  ],
   "engines": {
     "node": ">=22"
   },
