@@ -1,4 +1,4 @@
-# mergequeue
+# mergeq
 
 Watch a GitHub merge queue in your terminal.
 
