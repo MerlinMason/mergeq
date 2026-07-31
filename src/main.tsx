@@ -2,6 +2,7 @@ import React from "react";
 import { render } from "ink";
 import App, { KEY_HINTS } from "./App.js";
 import { resolveRepo, resolveToken, SetupError } from "./auth.js";
+import { ESC } from "./link.js";
 
 const HELP = `
   mergequeue — watch a GitHub merge queue in your terminal
@@ -56,6 +57,24 @@ async function main() {
   const branch = flag("branch") ?? repo.defaultBranch;
   const seconds = Number(flag("interval") ?? 5);
   const interval = Math.max(2, Number.isFinite(seconds) ? seconds : 5) * 1000;
+
+  // Ink updates a frame by moving the cursor up by the previous frame's height.
+  // Once a frame is tall enough to scroll the terminal, that arithmetic can no
+  // longer reach the top of what it drew and the old frame is stranded above the
+  // new one. The alternate screen has no scrollback, so there is nowhere to
+  // strand anything.
+  const alternateScreen = process.stdout.isTTY;
+  if (alternateScreen) {
+    process.stdout.write(`${ESC}[?1049h`);
+    const restore = () => process.stdout.write(`${ESC}[?1049l`);
+    process.on("exit", restore);
+    for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
+      process.on(signal, () => {
+        restore();
+        process.exit(0);
+      });
+    }
+  }
 
   render(
     <App
