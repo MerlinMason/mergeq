@@ -27,7 +27,7 @@ export type Queue = {
   viewer: string;
 };
 
-export const QUEUE_PAGE = 100;
+const QUEUE_PAGE = 100;
 
 const QUERY = `
 query($owner:String!,$name:String!,$branch:String!){

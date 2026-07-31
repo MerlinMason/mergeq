@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Box, Spacer, Text, useAnimation, useApp, useInput, useWindowSize } from "ink";
 import Gradient from "ink-gradient";
 import { TitledBox, titleStyles } from "@mishieck/ink-titled-box";
-import { useQueue, type Event, type Target } from "./useQueue.js";
+import { useQueue, type Target } from "./useQueue.js";
 import { usePoll } from "./usePoll.js";
 import { notify } from "./notify.js";
 import { SetupError } from "./auth.js";
@@ -416,27 +416,6 @@ function AllRow({
   );
 }
 
-function Events({ events, now }: { events: Event[]; now: number }) {
-  if (events.length === 0) return null;
-  return (
-    <Panel title="ACTIVITY">
-      {events.slice(0, 3).map((event) => (
-        <Box key={event.id}>
-          <Text dimColor>
-            {ago(event.at, now)} ago{" "}
-          </Text>
-          <Text
-            color={event.tone === "good" ? "green" : event.tone === "bad" ? "red" : undefined}
-            bold={event.mine}
-          >
-            {event.text}
-          </Text>
-        </Box>
-      ))}
-    </Panel>
-  );
-}
-
 const BRAND = "fruit";
 
 // figlet "Future Thin", frozen so the binary needs no font files at runtime
@@ -497,7 +476,7 @@ export default function App({
 }) {
   const { exit } = useApp();
   const { columns: width } = useWindowSize();
-  const { queue, viewer, checks, events, error, fetching, updatedAt } = useQueue(target, interval);
+  const { queue, viewer, checks, error, fetching, updatedAt } = useQueue(target, interval);
   const [now, setNow] = useState(Date.now());
   const [showAll, setShowAll] = useState(all);
   const [selection, setSelection] = useState(0);
@@ -715,7 +694,6 @@ export default function App({
         loading={outcomesLoading}
         now={now}
       />
-      {!showAll && mine.length > 0 ? <Events events={events} now={now} /> : null}
     </Box>
   );
 }
