@@ -1,37 +1,15 @@
-# mergequeue
+# mergeq
 
 Watch a GitHub merge queue from your terminal: where your pull requests are in
 it, what is holding them up, and when they will land.
 
-```
- ───────────────────────────────────────────────────────────────────────────
- ┌┬┐┌─╴┌─┐┌─╴┌─╴┌─┐╷ ╷┌─╴╷ ╷┌─╴
- │││├╴ ├┬┘│╶┐├╴ │┐││ │├╴ │ │├╴
- ╵ ╵└─╴╵└╴└─┘└─╴└┴┘└─┘└─╴└─┘└─╴
- owner/repo → main
- ↑↓ pick · ⏎  open PR · a toggle all/yours · o open queue · q quit
-
- ╭ QUEUE ──────────────────────────────────────────────────────────────────╮
- │ 5 queued   🥵 getting spicy   join now 🔀 in ~18m                       │
- │                                                                         │
- │ ─────────────────────────────────────────────────────────────────────── │
- │                                                                         │
- │   ⋯ 2 ahead ───────────────────────────────────────────────         ~6m │
- │ ▸ ⠹ #421  Cache the settings lookup per request       pos 3   🔀 in ~9m │
- │     ▓▓▓▓▓▓▓░░░ 24/33 · ci/build                                         │
- ╰─────────────────────────────────────────────────────────────────────────╯
-
- ╭ YOUR RECENT ────────────────────────────────────────────────────────────╮
- │ ▸   #418  Retry webhook delivery on 502               🔀 shipped 2h ago │
- │     #402  Drop the legacy importer                     💥 failed 1d ago │
- ╰─────────────────────────────────────────────────────────────────────────╯
-```
+<img width="833" height="412" alt="mergequeue watching a merge queue" src="https://github.com/user-attachments/assets/89f42722-35ac-499a-a84f-36af8bcc8dba" />
 
 ## Install
 
 You need the [GitHub CLI](https://cli.github.com), logged in, and Node 22 or
-newer. mergequeue has no credentials of its own — it asks `gh` for a token, so
-if `gh` works, mergequeue works.
+newer. mergeq has no credentials of its own — it asks `gh` for a token, so if
+`gh` works, mergeq works.
 
 ```bash
 brew install gh   # if you do not have it
