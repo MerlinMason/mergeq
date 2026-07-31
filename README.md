@@ -3,21 +3,26 @@
 Watch a GitHub merge queue in your terminal.
 
 ```bash
-bun install
-bun run dev --repo incident-io/core
+cd ~/code/your-repo
+npx mergeq
 ```
 
-With no `--repo`, it falls back to `$MERGEQ_REPO` and then to the current
-directory's repository — so `bun run dev` on its own works from inside a
-checkout of the repo you want to watch, but not from this one, which has no
-GitHub remote. Set a default with:
+Run it from inside a checkout and it watches that repository's queue. Elsewhere,
+name one:
 
 ```bash
-export MERGEQ_REPO=incident-io/core
+npx mergeq --repo owner/name
+```
+
+`--repo` falls back to `$MERGEQ_REPO`, then to the current directory's
+repository. Set a default with:
+
+```bash
+export MERGEQ_REPO=owner/name
 ```
 
 Keys are listed under the title: `↑↓` pick · `⏎` open the selected pull
-request · `a` toggle all/mine · `o` open the queue on GitHub · `q` quit.
+request · `a` toggle all/yours · `o` open the queue on GitHub · `q` quit.
 
 Flags: `--repo owner/name`, `--branch <name>`, `--interval <seconds>` (default
 5), `--all` to start on the full queue, `--as <login>` to follow someone else's
@@ -74,9 +79,9 @@ display only refreshes twice a minute. If polling stalls the header says so.
 ## Where the estimate comes from
 
 GitHub's own `estimatedTimeToMerge` assumes roughly 1.7 minutes per position.
-Measured against the last 50 merges of incident-io/core, the queue actually
-merges one pull request every ~3.1 minutes, so that estimate runs about 1.8×
-optimistic.
+Measured against the last fifty merges of a busy repository, that queue actually
+merged one pull request every three minutes or so — the supplied estimate ran
+close to twice as fast as reality.
 
 The estimate here is `position × observed gap`, where the gap is the median
 interval between recent merges — a median rather than an average so that one
