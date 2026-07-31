@@ -1,5 +1,5 @@
 {
-  "name": "mergeq",
+  "name": "mergequeue",
   "version": "0.1.0",
   "description": "Watch a GitHub merge queue in your terminal",
   "keywords": ["github", "merge-queue", "cli", "tui", "ink"],
