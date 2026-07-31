@@ -280,7 +280,17 @@ function Recently({
         </Panel>
       );
     }
-    if (!error) return null;
+    if (!error) {
+      return (
+        <Panel title={title}>
+          <Text dimColor>
+            {showAuthor
+              ? "Nothing has left the queue lately"
+              : "Nothing of yours has left the queue lately"}
+          </Text>
+        </Panel>
+      );
+    }
     return (
       <Panel title={title}>
         <Text color="red">✗ {error.message}</Text>

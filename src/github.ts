@@ -211,7 +211,7 @@ export async function fetchOutcomes(opts: {
 
   const data = await graphql<{ search: { nodes: Node[] } }>(
     opts.token,
-    `query($q:String!){ search(query:$q, type:ISSUE, first:10){ nodes{ ... on PullRequest {
+    `query($q:String!){ search(query:$q, type:ISSUE, first:50){ nodes{ ... on PullRequest {
       number title author{ login }
       removed: timelineItems(last:3, itemTypes:[REMOVED_FROM_MERGE_QUEUE_EVENT]){ nodes{ ... on RemovedFromMergeQueueEvent { createdAt reason } } }
     }}}}`,
