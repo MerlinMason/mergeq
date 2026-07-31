@@ -18,16 +18,25 @@ short.
 
 ## Running it
 
+Try it without installing anything:
+
 ```bash
 cd ~/code/your-repo
-npx mergeq
+npx @merlinmason/mergeq
+```
+
+If you keep it, install it once and the command is `mergeq` from then on:
+
+```bash
+npm i -g @merlinmason/mergeq
+mergeq
 ```
 
 Run it from inside a checkout and it watches that repository's queue. Elsewhere,
 name one:
 
 ```bash
-npx mergeq --repo owner/name
+mergeq --repo owner/name
 ```
 
 `--repo` falls back to `$MERGEQ_REPO`, then to the current directory's
