@@ -11,9 +11,11 @@ import { link, openUrl, pullRequestUrl } from "./link.js";
 // whatever package.json happens to sit next to it.
 import { version } from "../package.json" with { type: "json" };
 import {
+  act,
   fetchOutcomes,
   fetchRate,
   outcomeKey,
+  type Action,
   type Checks,
   type Entry,
   type EntryState,
@@ -37,8 +39,12 @@ const RECENT_LIMIT = 6;
 
 const STARTED_AT = Date.now();
 
-export const KEY_HINTS =
-  "↑↓ pick · ⏎  open PR · a toggle all/yours · o open queue · q quit";
+// The queue actions are only offered when one of yours is selected, so the line
+// only mentions them then. The help text lists everything.
+const keyHints = (actions: boolean) =>
+  `↑↓ pick · ⏎  open PR${actions ? " · d remove · f front" : ""} · a toggle all/yours · o open queue · q quit`;
+
+export const KEY_HINTS = keyHints(true);
 
 function Spinner({ color }: { color: string }) {
   const { frame } = useAnimation({ interval: 80 });
@@ -452,6 +458,96 @@ const Badge = React.memo(function Badge() {
   );
 });
 
+const CONSEQUENCE: Record<Action, string[]> = {
+  remove: [
+    "It leaves the queue and stops building. The checks it has already",
+    "run are discarded.",
+    " ",
+    "You can queue it again afterwards, from the back.",
+  ],
+  jump: [
+    "It goes to the front, so it merges next and everything currently",
+    "ahead of it waits longer.",
+    " ",
+    "Jumping requeues it, so its checks start again from a new base.",
+  ],
+};
+
+function Confirm({
+  action,
+  entry,
+  depth,
+  width,
+  pending,
+  error,
+}: {
+  action: Action;
+  entry: Entry;
+  depth: number;
+  width: number;
+  pending: boolean;
+  error: Error | null;
+}) {
+  const remove = action === "remove";
+  const accent = remove ? "red" : "yellow";
+  const verb = remove ? "Remove" : "Move";
+  const where = remove ? "from the queue" : "to the front of the queue";
+
+  return (
+    <Box flexDirection="column" paddingX={1} paddingTop={1}>
+      <Rule width={width} />
+
+      <Box marginTop={2} marginLeft={2} flexDirection="column">
+        <Box>
+          <Text color={accent} bold>
+            {verb} #{entry.pullRequest.number}{" "}
+          </Text>
+          <Text bold>{where}?</Text>
+        </Box>
+
+        <Box marginTop={1}>
+          <Text wrap="truncate">{entry.pullRequest.title}</Text>
+        </Box>
+        <Text dimColor>
+          position {entry.position} of {depth}
+        </Text>
+
+        <Box marginTop={2} flexDirection="column">
+          {CONSEQUENCE[action].map((line, index) => (
+            <Text key={index} dimColor>
+              {line}
+            </Text>
+          ))}
+        </Box>
+
+        <Box marginTop={2}>
+          {pending ? (
+            <Box>
+              <Spinner color={accent} />
+              <Text dimColor> asking GitHub…</Text>
+            </Box>
+          ) : error ? (
+            <Box flexDirection="column">
+              <Text color="red">✗ {error.message}</Text>
+              <Text dimColor>esc go back</Text>
+            </Box>
+          ) : (
+            <Text>
+              <Text color={accent} bold>
+                ⏎ yes,{" "}
+              </Text>
+              <Text color={accent} bold>
+                {remove ? "remove it" : "jump the queue"}
+              </Text>
+              <Text dimColor>{"     "}esc leave it alone</Text>
+            </Text>
+          )}
+        </Box>
+      </Box>
+    </Box>
+  );
+}
+
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <TitledBox
@@ -483,6 +579,9 @@ export default function App({
   const [now, setNow] = useState(Date.now());
   const [showAll, setShowAll] = useState(all);
   const [selection, setSelection] = useState(0);
+  const [confirming, setConfirming] = useState<{ action: Action; entry: Entry } | null>(null);
+  const [acting, setActing] = useState(false);
+  const [actionError, setActionError] = useState<Error | null>(null);
 
   const loadOutcomes = useCallback(
     () => fetchOutcomes({ ...target, login: showAll ? undefined : viewer }),
@@ -550,7 +649,39 @@ export default function App({
   const selectedEntry = selected?.outcome === null ? selected.number : null;
   const selectedOutcome = selected?.outcome ?? null;
 
+  // The entry the queue actions would apply to: yours, and still in the queue.
+  // Restricted to your own while the behaviour of jumping is unverified — being
+  // wrong about somebody else's pull request costs them their afternoon.
+  const actionable = mine.find((entry) => entry.pullRequest.number === selectedEntry) ?? null;
+
+  const run = useCallback(
+    async (action: Action, entry: Entry) => {
+      setActing(true);
+      setActionError(null);
+      try {
+        await act({ token: target.token, action, pullRequestId: entry.pullRequest.id });
+        setConfirming(null);
+      } catch (caught) {
+        setActionError(caught as Error);
+      } finally {
+        setActing(false);
+      }
+    },
+    [target.token],
+  );
+
   useInput((input, key) => {
+    if (confirming) {
+      if (acting) return;
+      if (key.escape || input === "q") {
+        setConfirming(null);
+        setActionError(null);
+        return;
+      }
+      if (key.return && !actionError) void run(confirming.action, confirming.entry);
+      return;
+    }
+
     if (input === "q" || key.escape || (key.ctrl && input === "c")) exit();
     if (input === "a") setShowAll((value) => !value);
     if (input === "j" || key.downArrow)
@@ -558,7 +689,22 @@ export default function App({
     if (input === "k" || key.upArrow) setSelection((value) => Math.max(0, value - 1));
     if (key.return && selected) openUrl(pullRequestUrl(target.owner, target.name, selected.number));
     if (input === "o" && queue) openUrl(queue.url);
+    if (input === "d" && actionable) setConfirming({ action: "remove", entry: actionable });
+    if (input === "f" && actionable) setConfirming({ action: "jump", entry: actionable });
   });
+
+  if (confirming) {
+    return (
+      <Confirm
+        action={confirming.action}
+        entry={confirming.entry}
+        depth={queue?.totalCount ?? 0}
+        width={width}
+        pending={acting}
+        error={actionError}
+      />
+    );
+  }
 
   if (error instanceof SetupError) {
     return (
@@ -609,7 +755,7 @@ export default function App({
 
       <Box marginBottom={1}>
         <Text dimColor wrap="truncate">
-          {KEY_HINTS}
+          {keyHints(actionable !== null)}
         </Text>
       </Box>
 

@@ -13,6 +13,7 @@ export type Entry = {
   estimatedTimeToMerge: number | null;
   headCommit: { oid: string } | null;
   pullRequest: {
+    id: string;
     number: number;
     title: string;
     author: { login: string } | null;
@@ -43,7 +44,7 @@ query($owner:String!,$name:String!,$branch:String!){
           state
           estimatedTimeToMerge
           headCommit{ oid }
-          pullRequest{ number title author{ login } }
+          pullRequest{ id number title author{ login } }
         }
       }
     }
@@ -270,6 +271,24 @@ export async function fetchRate(opts: {
   if (median <= 0) return null;
 
   return { gapMinutes: median / 60000 };
+}
+
+export type Action = "remove" | "jump";
+
+// GitHub exposes no viewerCan* field for either of these, so whether you are
+// allowed is only discoverable by asking. Removing needs write access; jumping
+// is admin-only by default and undocumented, so the error is the interface.
+export async function act(opts: {
+  token: string;
+  action: Action;
+  pullRequestId: string;
+}): Promise<void> {
+  const mutation =
+    opts.action === "remove"
+      ? `mutation($id:ID!){ dequeuePullRequest(input:{ id:$id }){ clientMutationId } }`
+      : `mutation($id:ID!){ enqueuePullRequest(input:{ pullRequestId:$id, jump:true }){ clientMutationId } }`;
+
+  await graphql(opts.token, mutation, { id: opts.pullRequestId });
 }
 
 export async function fetchQueue(opts: {
