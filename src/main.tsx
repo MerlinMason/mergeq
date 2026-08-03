@@ -2,7 +2,6 @@ import React from "react";
 import { render } from "ink";
 import App, { KEY_HINTS } from "./App.js";
 import { resolveRepo, resolveToken, SetupError } from "./auth.js";
-import { ESC } from "./link.js";
 
 const HELP = `
   mergequeue — watch a GitHub merge queue in your terminal
@@ -58,31 +57,35 @@ async function main() {
   const seconds = Number(flag("interval") ?? 5);
   const interval = Math.max(2, Number.isFinite(seconds) ? seconds : 5) * 1000;
 
-  // Ink updates a frame by moving the cursor up by the previous frame's height.
-  // Once a frame is tall enough to scroll the terminal, that arithmetic can no
-  // longer reach the top of what it drew and the old frame is stranded above the
-  // new one. The alternate screen has no scrollback, so there is nowhere to
-  // strand anything.
-  const alternateScreen = process.stdout.isTTY;
-  if (alternateScreen) {
-    process.stdout.write(`${ESC}[?1049h`);
-    const restore = () => process.stdout.write(`${ESC}[?1049l`);
-    process.on("exit", restore);
-    for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
-      process.on(signal, () => {
-        restore();
-        process.exit(0);
-      });
-    }
-  }
-
-  render(
+  const app = (
     <App
       target={{ token, owner: repo.owner, name: repo.name, branch, as: flag("as") }}
       interval={interval}
       all={process.argv.includes("--all")}
-    />,
+    />
   );
+
+  // A frame is updated by moving the cursor up by the height of the last one. On
+  // the alternate screen there is no scrollback for a mis-counted frame to be
+  // stranded in, and Ink restores the primary screen on the way out.
+  const instance = render(app, { alternateScreen: true });
+
+  // Timers do not fire while the machine sleeps, so a gap far longer than the
+  // tick means it just woke. Whatever is on screen was drawn for a terminal that
+  // may since have been resized without anyone saying so, and a frame wider than
+  // its window wraps — which is exactly what breaks the cursor arithmetic. Start
+  // again from a blank screen instead of trusting the old measurements.
+  const TICK = 5_000;
+  let previousTick = Date.now();
+  const watchForWake = setInterval(() => {
+    const now = Date.now();
+    if (now - previousTick > TICK * 3) {
+      instance.clear();
+      instance.rerender(app);
+    }
+    previousTick = now;
+  }, TICK);
+  watchForWake.unref();
 }
 
 main().catch(fail);
