@@ -273,7 +273,7 @@ export async function fetchRate(opts: {
   return { gapMinutes: median / 60000 };
 }
 
-export type Action = "remove" | "jump";
+export type Action = "eject" | "jump";
 
 // GitHub exposes no viewerCan* field for either of these, so whether you are
 // allowed is only discoverable by asking. Removing needs write access; jumping
@@ -284,7 +284,7 @@ export async function act(opts: {
   pullRequestId: string;
 }): Promise<void> {
   const mutation =
-    opts.action === "remove"
+    opts.action === "eject"
       ? `mutation($id:ID!){ dequeuePullRequest(input:{ id:$id }){ clientMutationId } }`
       : `mutation($id:ID!){ enqueuePullRequest(input:{ pullRequestId:$id, jump:true }){ clientMutationId } }`;
 

@@ -42,7 +42,7 @@ const STARTED_AT = Date.now();
 // The queue actions are only offered when one of yours is selected, so the line
 // only mentions them then. The help text lists everything.
 const keyHints = (actions: boolean) =>
-  `↑↓ pick · ⏎  open PR${actions ? " · d remove · f front" : ""} · a toggle all/yours · o open queue · q quit`;
+  `↑↓ pick · ⏎  open PR${actions ? " · e eject · j jump" : ""} · a toggle all/yours · o open queue · q quit`;
 
 export const KEY_HINTS = keyHints(true);
 
@@ -459,7 +459,7 @@ const Badge = React.memo(function Badge() {
 });
 
 const CONSEQUENCE: Record<Action, string[]> = {
-  remove: [
+  eject: [
     "It leaves the queue and stops building. The checks it has already",
     "run are discarded.",
     " ",
@@ -473,11 +473,30 @@ const CONSEQUENCE: Record<Action, string[]> = {
   ],
 };
 
+function Button({
+  label,
+  focused,
+  color,
+}: {
+  label: string;
+  focused: boolean;
+  color?: string;
+}) {
+  return (
+    <Box marginRight={2}>
+      <Text inverse={focused} color={focused ? color : undefined} dimColor={!focused} bold={focused}>
+        {`  ${label}  `}
+      </Text>
+    </Box>
+  );
+}
+
 function Confirm({
   action,
   entry,
   depth,
   width,
+  confirmFocused,
   pending,
   error,
 }: {
@@ -485,13 +504,14 @@ function Confirm({
   entry: Entry;
   depth: number;
   width: number;
+  confirmFocused: boolean;
   pending: boolean;
   error: Error | null;
 }) {
-  const remove = action === "remove";
-  const accent = remove ? "red" : "yellow";
-  const verb = remove ? "Remove" : "Move";
-  const where = remove ? "from the queue" : "to the front of the queue";
+  const eject = action === "eject";
+  const accent = eject ? "red" : "yellow";
+  const verb = eject ? "Eject" : "Move";
+  const where = eject ? "from the queue" : "to the front of the queue";
 
   return (
     <Box flexDirection="column" paddingX={1} paddingTop={1}>
@@ -520,7 +540,7 @@ function Confirm({
           ))}
         </Box>
 
-        <Box marginTop={2}>
+        <Box marginTop={2} flexDirection="column">
           {pending ? (
             <Box>
               <Spinner color={accent} />
@@ -529,18 +549,24 @@ function Confirm({
           ) : error ? (
             <Box flexDirection="column">
               <Text color="red">✗ {error.message}</Text>
-              <Text dimColor>esc go back</Text>
+              <Box marginTop={1}>
+                <Text dimColor>esc go back</Text>
+              </Box>
             </Box>
           ) : (
-            <Text>
-              <Text color={accent} bold>
-                ⏎ yes,{" "}
-              </Text>
-              <Text color={accent} bold>
-                {remove ? "remove it" : "jump the queue"}
-              </Text>
-              <Text dimColor>{"     "}esc leave it alone</Text>
-            </Text>
+            <>
+              <Box>
+                <Button label="Leave it alone" focused={!confirmFocused} />
+                <Button
+                  label={eject ? `Eject #${entry.pullRequest.number}` : "Jump the queue"}
+                  focused={confirmFocused}
+                  color={accent}
+                />
+              </Box>
+              <Box marginTop={1}>
+                <Text dimColor>←→ choose · ⏎ do it · y yes · n no · esc cancel</Text>
+              </Box>
+            </>
           )}
         </Box>
       </Box>
@@ -580,6 +606,7 @@ export default function App({
   const [showAll, setShowAll] = useState(all);
   const [selection, setSelection] = useState(0);
   const [confirming, setConfirming] = useState<{ action: Action; entry: Entry } | null>(null);
+  const [confirmFocused, setConfirmFocused] = useState(false);
   const [acting, setActing] = useState(false);
   const [actionError, setActionError] = useState<Error | null>(null);
 
@@ -670,27 +697,35 @@ export default function App({
     [target.token],
   );
 
+  const dismiss = useCallback(() => {
+    setConfirming(null);
+    setActionError(null);
+    setConfirmFocused(false);
+  }, []);
+
   useInput((input, key) => {
     if (confirming) {
       if (acting) return;
-      if (key.escape || input === "q") {
-        setConfirming(null);
-        setActionError(null);
-        return;
-      }
-      if (key.return && !actionError) void run(confirming.action, confirming.entry);
+      if (key.escape || input === "n" || input === "q") return dismiss();
+      if (actionError) return;
+
+      // Focus starts on leaving it alone, so a reflex return is the safe answer.
+      if (key.leftArrow || key.upArrow) setConfirmFocused(false);
+      if (key.rightArrow || key.downArrow || key.tab) setConfirmFocused(true);
+      if (input === "y") void run(confirming.action, confirming.entry);
+      if (key.return && confirmFocused) void run(confirming.action, confirming.entry);
+      if (key.return && !confirmFocused) dismiss();
       return;
     }
 
     if (input === "q" || key.escape || (key.ctrl && input === "c")) exit();
     if (input === "a") setShowAll((value) => !value);
-    if (input === "j" || key.downArrow)
-      setSelection((value) => Math.min(value + 1, Math.max(0, selectable.length - 1)));
-    if (input === "k" || key.upArrow) setSelection((value) => Math.max(0, value - 1));
+    if (key.downArrow) setSelection((value) => Math.min(value + 1, Math.max(0, selectable.length - 1)));
+    if (key.upArrow) setSelection((value) => Math.max(0, value - 1));
     if (key.return && selected) openUrl(pullRequestUrl(target.owner, target.name, selected.number));
     if (input === "o" && queue) openUrl(queue.url);
-    if (input === "d" && actionable) setConfirming({ action: "remove", entry: actionable });
-    if (input === "f" && actionable) setConfirming({ action: "jump", entry: actionable });
+    if (input === "e" && actionable) setConfirming({ action: "eject", entry: actionable });
+    if (input === "j" && actionable) setConfirming({ action: "jump", entry: actionable });
   });
 
   if (confirming) {
@@ -700,6 +735,7 @@ export default function App({
         entry={confirming.entry}
         depth={queue?.totalCount ?? 0}
         width={width}
+        confirmFocused={confirmFocused}
         pending={acting}
         error={actionError}
       />
