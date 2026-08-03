@@ -39,8 +39,13 @@ const RECENT_LIMIT = 6;
 
 const STARTED_AT = Date.now();
 
-export const KEY_HINTS =
-  "↑↓ pick · ⏎  open PR · e eject · j jump · a toggle all/yours · o open queue · q quit";
+// The queue actions only apply to your own entries. Rather than hide the keys
+// when they do not — which reads as the feature being absent — the line keeps
+// them and says who they are for.
+const keyHints = (actionable: boolean) =>
+  `↑↓ pick · ⏎  open PR · e eject · j jump${actionable ? "" : " (your own)"} · a toggle all/yours · o open queue · q quit`;
+
+export const KEY_HINTS = keyHints(true);
 
 function Spinner({ color }: { color: string }) {
   const { frame } = useAnimation({ interval: 80 });
@@ -774,7 +779,7 @@ export default function App({
 
       <Box marginBottom={1}>
         <Text dimColor wrap="truncate">
-          {KEY_HINTS}
+          {keyHints(actionable !== null)}
         </Text>
       </Box>
 
