@@ -458,19 +458,9 @@ const Badge = React.memo(function Badge() {
   );
 });
 
-const CONSEQUENCE: Record<Action, string[]> = {
-  eject: [
-    "It leaves the queue and stops building. The checks it has already",
-    "run are discarded.",
-    " ",
-    "You can queue it again afterwards, from the back.",
-  ],
-  jump: [
-    "It goes to the front, so it merges next and everything currently",
-    "ahead of it waits longer.",
-    " ",
-    "Jumping requeues it, so its checks start again from a new base.",
-  ],
+const CONSEQUENCE: Record<Action, string> = {
+  eject: "Discards the checks it has run. You can queue it again afterwards, from the back.",
+  jump: "It merges next. Everything ahead of it waits longer, and its checks start again.",
 };
 
 function Button({
@@ -510,34 +500,35 @@ function Confirm({
 }) {
   const eject = action === "eject";
   const accent = eject ? "red" : "yellow";
-  const verb = eject ? "Eject" : "Move";
-  const where = eject ? "from the queue" : "to the front of the queue";
+  const verb = eject ? "Eject" : "Jump";
+  const where = eject ? "from the queue?" : "to the front of the queue?";
 
   return (
     <Box flexDirection="column" paddingX={1} paddingTop={1}>
       <Rule width={width} />
 
-      <Box marginTop={2} marginLeft={2} flexDirection="column">
+      <Box marginTop={1} flexDirection="column">
         <Box>
           <Text color={accent} bold>
-            {verb} #{entry.pullRequest.number}{" "}
+            {verb}{" "}
           </Text>
-          <Text bold>{where}?</Text>
+          <Text bold>{where}</Text>
         </Box>
+
+        <Panel title="PULL REQUEST">
+          <Box>
+            <Box width={9} flexShrink={0}>
+              <Text bold>#{entry.pullRequest.number}</Text>
+            </Box>
+            <Text wrap="truncate">{entry.pullRequest.title}</Text>
+          </Box>
+          <Text dimColor>
+            position {entry.position} of {depth}
+          </Text>
+        </Panel>
 
         <Box marginTop={1}>
-          <Text wrap="truncate">{entry.pullRequest.title}</Text>
-        </Box>
-        <Text dimColor>
-          position {entry.position} of {depth}
-        </Text>
-
-        <Box marginTop={2} flexDirection="column">
-          {CONSEQUENCE[action].map((line, index) => (
-            <Text key={index} dimColor>
-              {line}
-            </Text>
-          ))}
+          <Text dimColor>{CONSEQUENCE[action]}</Text>
         </Box>
 
         <Box marginTop={2} flexDirection="column">
@@ -556,15 +547,11 @@ function Confirm({
           ) : (
             <>
               <Box>
-                <Button label="Leave it alone" focused={!confirmFocused} />
-                <Button
-                  label={eject ? `Eject #${entry.pullRequest.number}` : "Jump the queue"}
-                  focused={confirmFocused}
-                  color={accent}
-                />
+                <Button label="Cancel" focused={!confirmFocused} />
+                <Button label={verb} focused={confirmFocused} color={accent} />
               </Box>
               <Box marginTop={1}>
-                <Text dimColor>←→ choose · ⏎ do it · y yes · n no · esc cancel</Text>
+                <Text dimColor>←→ choose · ⏎ select · y or n</Text>
               </Box>
             </>
           )}
