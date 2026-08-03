@@ -7,6 +7,9 @@ import { usePoll } from "./usePoll.js";
 import { notify } from "./notify.js";
 import { SetupError } from "./auth.js";
 import { link, openUrl, pullRequestUrl } from "./link.js";
+// Inlined at build time, so it reports the version of this build rather than
+// whatever package.json happens to sit next to it.
+import { version } from "../package.json" with { type: "json" };
 import {
   fetchOutcomes,
   fetchRate,
@@ -588,7 +591,11 @@ export default function App({
     <Box flexDirection="column" paddingX={1} paddingTop={1}>
       <Rule width={width} />
 
-      <Wordmark />
+      <Box>
+        <Wordmark />
+        <Spacer />
+        <Text dimColor>v{version}</Text>
+      </Box>
 
       <Box>
         <Text bold>
