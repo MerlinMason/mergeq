@@ -39,12 +39,8 @@ const RECENT_LIMIT = 6;
 
 const STARTED_AT = Date.now();
 
-// The queue actions are only offered when one of yours is selected, so the line
-// only mentions them then. The help text lists everything.
-const keyHints = (actions: boolean) =>
-  `↑↓ pick · ⏎  open PR${actions ? " · e eject · j jump" : ""} · a toggle all/yours · o open queue · q quit`;
-
-export const KEY_HINTS = keyHints(true);
+export const KEY_HINTS =
+  "↑↓ pick · ⏎  open PR · e eject · j jump · a toggle all/yours · o open queue · q quit";
 
 function Spinner({ color }: { color: string }) {
   const { frame } = useAnimation({ interval: 80 });
@@ -778,7 +774,7 @@ export default function App({
 
       <Box marginBottom={1}>
         <Text dimColor wrap="truncate">
-          {keyHints(actionable !== null)}
+          {KEY_HINTS}
         </Text>
       </Box>
 
