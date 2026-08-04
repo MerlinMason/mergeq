@@ -39,10 +39,10 @@ const RECENT_LIMIT = 6;
 
 const STARTED_AT = Date.now();
 
-// Offered only for your own entries, so listed only when one is selected. The
-// help text lists everything.
+// Offered only for your own entries, so listed only when one is selected — and
+// appended, so the keys that are always there never move.
 const keyHints = (actionable: boolean) =>
-  `↑↓ pick · ⏎  open PR${actionable ? " · e eject · j jump" : ""} · a toggle all/yours · o open queue · q quit`;
+  `↑↓ pick · ⏎  open PR · a toggle all/yours · o open queue · q quit${actionable ? " · e eject · j jump" : ""}`;
 
 export const KEY_HINTS = keyHints(true);
 
