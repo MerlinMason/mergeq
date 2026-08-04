@@ -463,6 +463,8 @@ const CONSEQUENCE: Record<Action, string> = {
   jump: "It merges next. Everything ahead of it waits longer, and its checks start again.",
 };
 
+// Brackets so the one you are not on still reads as a button rather than as
+// prose that happens to sit nearby.
 function Button({
   label,
   focused,
@@ -474,8 +476,13 @@ function Button({
 }) {
   return (
     <Box marginRight={2}>
-      <Text inverse={focused} color={focused ? color : undefined} dimColor={!focused} bold={focused}>
-        {`  ${label}  `}
+      <Text
+        inverse={focused}
+        color={focused ? color : undefined}
+        dimColor={!focused}
+        bold={focused}
+      >
+        {focused ? `  ${label}  ` : `[ ${label} ]`}
       </Text>
     </Box>
   );
@@ -486,6 +493,7 @@ function Confirm({
   entry,
   depth,
   width,
+  rows,
   confirmFocused,
   pending,
   error,
@@ -494,6 +502,7 @@ function Confirm({
   entry: Entry;
   depth: number;
   width: number;
+  rows: number;
   confirmFocused: boolean;
   pending: boolean;
   error: Error | null;
@@ -501,60 +510,72 @@ function Confirm({
   const eject = action === "eject";
   const accent = eject ? "red" : "yellow";
   const verb = eject ? "Eject" : "Jump";
-  const where = eject ? "from the queue?" : "to the front of the queue?";
+  const question = eject
+    ? "Take this out of the merge queue?"
+    : "Send this to the front of the queue?";
+
+  const card = Math.min(72, Math.max(48, width - 8));
+  const inner = card - 4;
 
   return (
-    <Box flexDirection="column" paddingX={1} paddingTop={1}>
-      <Rule width={width} />
+    // Centred rather than pinned to a corner: it is the whole screen while it is
+    // up, and should look like it meant to be.
+    <Box height={rows - 1} flexDirection="column" justifyContent="center" alignItems="center">
+      <Box width={card} flexDirection="column">
+        <TitledBox
+          borderStyle="round"
+          borderColor={accent}
+          titles={[verb.toUpperCase()]}
+          titleStyles={titleStyles.rectangle}
+          flexDirection="column"
+          paddingX={1}
+        >
+          <Text bold>{question}</Text>
 
-      <Box marginTop={1} flexDirection="column">
-        <Box>
-          <Text color={accent} bold>
-            {verb}{" "}
-          </Text>
-          <Text bold>{where}</Text>
-        </Box>
-
-        <Panel title="PULL REQUEST">
-          <Box>
-            <Box width={9} flexShrink={0}>
-              <Text bold>#{entry.pullRequest.number}</Text>
-            </Box>
-            <Text wrap="truncate">{entry.pullRequest.title}</Text>
-          </Box>
-          <Text dimColor>
-            position {entry.position} of {depth}
-          </Text>
-        </Panel>
-
-        <Box marginTop={1}>
-          <Text dimColor>{CONSEQUENCE[action]}</Text>
-        </Box>
-
-        <Box marginTop={2} flexDirection="column">
-          {pending ? (
+          {/* The title is the one thing here somebody else wrote, so it is
+              quoted rather than set as if the interface said it. */}
+          <Box marginTop={1} flexDirection="column">
             <Box>
-              <Spinner color={accent} />
-              <Text dimColor> asking GitHub…</Text>
+              <Text color={accent}>{"│ "}</Text>
+              <Text bold>#{entry.pullRequest.number}</Text>
+              <Text>{"  "}</Text>
+              <Text wrap="truncate">{entry.pullRequest.title}</Text>
             </Box>
-          ) : error ? (
-            <Box flexDirection="column">
-              <Text color="red">✗ {error.message}</Text>
-              <Box marginTop={1}>
-                <Text dimColor>esc go back</Text>
+            <Box>
+              <Text color={accent}>{"│ "}</Text>
+              <Text dimColor>
+                position {entry.position} of {depth}
+              </Text>
+            </Box>
+          </Box>
+
+          <Box marginTop={1} width={inner}>
+            <Text dimColor>{CONSEQUENCE[action]}</Text>
+          </Box>
+
+          <Box marginTop={1}>
+            {pending ? (
+              <Box>
+                <Spinner color={accent} />
+                <Text dimColor> asking GitHub…</Text>
               </Box>
-            </Box>
-          ) : (
-            <>
+            ) : error ? (
+              <Text color="red" wrap="truncate">
+                ✗ {error.message}
+              </Text>
+            ) : (
               <Box>
                 <Button label="Cancel" focused={!confirmFocused} />
                 <Button label={verb} focused={confirmFocused} color={accent} />
               </Box>
-              <Box marginTop={1}>
-                <Text dimColor>←→ choose · ⏎ select · y or n</Text>
-              </Box>
-            </>
-          )}
+            )}
+          </Box>
+        </TitledBox>
+
+        <Box marginTop={1} justifyContent="center">
+          <Text dimColor>
+            {error ? "esc go back" : "←→ choose · ⏎  select · y or n · esc cancel"}
+          </Text>
         </Box>
       </Box>
     </Box>
@@ -587,7 +608,7 @@ export default function App({
   all: boolean;
 }) {
   const { exit } = useApp();
-  const { columns: width } = useWindowSize();
+  const { columns: width, rows } = useWindowSize();
   const { queue, viewer, checks, error, fetching, updatedAt } = useQueue(target, interval);
   const [now, setNow] = useState(Date.now());
   const [showAll, setShowAll] = useState(all);
@@ -722,6 +743,7 @@ export default function App({
         entry={confirming.entry}
         depth={queue?.totalCount ?? 0}
         width={width}
+        rows={rows}
         confirmFocused={confirmFocused}
         pending={acting}
         error={actionError}
