@@ -275,20 +275,52 @@ export async function fetchRate(opts: {
 
 export type Action = "eject" | "jump";
 
+const DEQUEUE = `mutation($id:ID!){ dequeuePullRequest(input:{ id:$id }){ clientMutationId } }`;
+const ENQUEUE_FRONT = `mutation($id:ID!){ enqueuePullRequest(input:{ pullRequestId:$id, jump:true }){ clientMutationId } }`;
+
+const ALREADY_QUEUED = "already in the queue";
+const REJOIN_ATTEMPTS = 5;
+const REJOIN_WAIT_MS = 600;
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 // GitHub exposes no viewerCan* field for either of these, so whether you are
-// allowed is only discoverable by asking. Removing needs write access; jumping
+// allowed is only discoverable by asking. Ejecting needs write access; jumping
 // is admin-only by default and undocumented, so the error is the interface.
 export async function act(opts: {
   token: string;
   action: Action;
   pullRequestId: string;
 }): Promise<void> {
-  const mutation =
-    opts.action === "eject"
-      ? `mutation($id:ID!){ dequeuePullRequest(input:{ id:$id }){ clientMutationId } }`
-      : `mutation($id:ID!){ enqueuePullRequest(input:{ pullRequestId:$id, jump:true }){ clientMutationId } }`;
+  const id = opts.pullRequestId;
 
-  await graphql(opts.token, mutation, { id: opts.pullRequestId });
+  if (opts.action === "eject") {
+    await graphql(opts.token, DEQUEUE, { id });
+    return;
+  }
+
+  // Jump is an option on joining the queue, not a way to move within it —
+  // enqueuePullRequest refuses a pull request that is already there. So the entry
+  // leaves and rejoins at the front, which is two mutations with a gap in the
+  // middle where it belongs to neither.
+  await graphql(opts.token, DEQUEUE, { id });
+
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await graphql(opts.token, ENQUEUE_FRONT, { id });
+      return;
+    } catch (caught) {
+      const message = (caught as Error).message;
+
+      // The dequeue is not always visible to the next call immediately.
+      if (message.includes(ALREADY_QUEUED) && attempt < REJOIN_ATTEMPTS) {
+        await wait(REJOIN_WAIT_MS);
+        continue;
+      }
+
+      throw new Error(`It left the queue but could not rejoin at the front — ${message}`);
+    }
+  }
 }
 
 export async function fetchQueue(opts: {

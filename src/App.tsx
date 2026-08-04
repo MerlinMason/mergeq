@@ -460,7 +460,7 @@ const Badge = React.memo(function Badge() {
 
 const CONSEQUENCE: Record<Action, string> = {
   eject: "Discards the checks it has run. You can queue it again afterwards, from the back.",
-  jump: "It merges next. Everything ahead of it waits longer, and its checks start again.",
+  jump: "It leaves the queue and rejoins at the front, so its checks start again and everything ahead of it waits longer.",
 };
 
 // Brackets so the one you are not on still reads as a button rather than as
