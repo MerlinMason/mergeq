@@ -1,3 +1,4 @@
+import { setTimeout as wait } from "node:timers/promises";
 import { SetupError } from "./auth.js";
 
 export type EntryState =
@@ -282,8 +283,6 @@ const ALREADY_QUEUED = "already in the queue";
 const REJOIN_ATTEMPTS = 5;
 const REJOIN_WAIT_MS = 600;
 
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
 // GitHub exposes no viewerCan* field for either of these, so whether you are
 // allowed is only discoverable by asking. Ejecting needs write access; jumping
 // is admin-only by default and undocumented, so the error is the interface.
@@ -291,6 +290,7 @@ export async function act(opts: {
   token: string;
   action: Action;
   pullRequestId: string;
+  signal?: AbortSignal;
 }): Promise<void> {
   const id = opts.pullRequestId;
 
@@ -305,16 +305,18 @@ export async function act(opts: {
   // middle where it belongs to neither.
   await graphql(opts.token, DEQUEUE, { id });
 
-  for (let attempt = 1; ; attempt++) {
+  for (let attempt = 1; attempt <= REJOIN_ATTEMPTS; attempt++) {
     try {
       await graphql(opts.token, ENQUEUE_FRONT, { id });
       return;
     } catch (caught) {
       const message = (caught as Error).message;
 
-      // The dequeue is not always visible to the next call immediately.
+      // The dequeue is not always visible to the next call immediately. Waiting
+      // on the signal means giving up if the dialog has since been dismissed,
+      // rather than adding the pull request back after somebody cancelled.
       if (message.includes(ALREADY_QUEUED) && attempt < REJOIN_ATTEMPTS) {
-        await wait(REJOIN_WAIT_MS);
+        await wait(REJOIN_WAIT_MS, undefined, { signal: opts.signal });
         continue;
       }
 

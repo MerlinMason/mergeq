@@ -57,32 +57,31 @@ async function main() {
   const seconds = Number(flag("interval") ?? 5);
   const interval = Math.max(2, Number.isFinite(seconds) ? seconds : 5) * 1000;
 
-  const app = (
+  // A frame is updated by moving the cursor up by the height of the last one. On
+  // the alternate screen there is no scrollback for a mis-counted frame to be
+  // stranded in, and Ink restores the primary screen on the way out.
+  render(
     <App
       target={{ token, owner: repo.owner, name: repo.name, branch, as: flag("as") }}
       interval={interval}
       all={process.argv.includes("--all")}
-    />
+    />,
+    { alternateScreen: true },
   );
 
-  // A frame is updated by moving the cursor up by the height of the last one. On
-  // the alternate screen there is no scrollback for a mis-counted frame to be
-  // stranded in, and Ink restores the primary screen on the way out.
-  const instance = render(app, { alternateScreen: true });
-
-  // Timers do not fire while the machine sleeps, so a gap far longer than the
-  // tick means it just woke. Whatever is on screen was drawn for a terminal that
-  // may since have been resized without anyone saying so, and a frame wider than
-  // its window wraps — which is exactly what breaks the cursor arithmetic. Start
-  // again from a blank screen instead of trusting the old measurements.
+  // Timers do not fire while the machine sleeps, so a tick arriving far later
+  // than it was due means it just woke — and sleeping is the one moment a
+  // terminal can be resized without a resize event being delivered, leaving Ink
+  // drawing to a width that no longer exists. Ink recomputes and redraws on that
+  // event, and only it knows how, so say the size may have changed and let it
+  // decide. Clearing by hand does not work: Ink.clear() re-seeds log-update with
+  // the frame it just erased, so an unchanged render writes nothing and the
+  // screen stays blank.
   const TICK = 5_000;
   let previousTick = Date.now();
   const watchForWake = setInterval(() => {
     const now = Date.now();
-    if (now - previousTick > TICK * 3) {
-      instance.clear();
-      instance.rerender(app);
-    }
+    if (now - previousTick > TICK * 3) process.stdout.emit("resize");
     previousTick = now;
   }, TICK);
   watchForWake.unref();

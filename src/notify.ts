@@ -23,9 +23,10 @@ function terminalNotifier(): string | null {
 
 function resolve(): Send {
   if (supportsEscapeNotifications()) {
-    const clean = (value: string) => value.replace(/[;\r\n]/g, " ").trim();
+    // Semicolons separate the fields of the escape, so they cannot appear in one.
+    const oscSafe = (value: string) => value.replace(/[;\r\n]/g, " ").trim();
     return (title, body) =>
-      process.stdout.write(`${ESC}]777;notify;${clean(title)};${clean(body)}${BEL}`);
+      process.stdout.write(`${ESC}]777;notify;${oscSafe(title)};${oscSafe(body)}${BEL}`);
   }
 
   const notifier = terminalNotifier();
@@ -36,11 +37,11 @@ function resolve(): Send {
 
   if (process.platform !== "darwin") return () => {};
 
-  const clean = (value: string) => value.replace(/["\\]/g, "\\$&");
+  const appleScriptSafe = (value: string) => value.replace(/["\\]/g, "\\$&");
   return (title, body) =>
     execFile("osascript", [
       "-e",
-      `display notification "${clean(body)}" with title "${clean(title)}" sound name "Ping"`,
+      `display notification "${appleScriptSafe(body)}" with title "${appleScriptSafe(title)}" sound name "Ping"`,
     ]);
 }
 

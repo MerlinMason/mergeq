@@ -42,7 +42,7 @@ export async function resolveToken(): Promise<string> {
   return token;
 }
 
-export type Repo = { owner: string; name: string; defaultBranch: string };
+type Repo = { owner: string; name: string; defaultBranch: string };
 
 export async function resolveRepo(spec?: string): Promise<Repo> {
   const raw = await gh([

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Box, Spacer, Text, useAnimation, useApp, useInput, useWindowSize } from "ink";
 import Gradient from "ink-gradient";
+import stringWidth from "string-width";
 import { TitledBox, titleStyles } from "@mishieck/ink-titled-box";
 import { useQueue, type Target } from "./useQueue.js";
 import { usePoll } from "./usePoll.js";
@@ -61,8 +62,12 @@ const REASONS: Record<string, { emoji: string; label: string }> = {
   invalid_merge_commit: { emoji: "🫠", label: "bad commit" },
 };
 
+// Measured in terminal columns, not code units: an emoji is two columns wide and
+// a variation selector adds units without adding width.
 const STATUS_WIDTH =
-  2 + 1 + Math.max(...Object.values(REASONS).map((r) => r.label.length)) + " 10h ago".length;
+  stringWidth("🔀 ") +
+  Math.max(...Object.values(REASONS).map((r) => stringWidth(r.label))) +
+  stringWidth(" 10h ago");
 
 function reasonOf(reason: string): { emoji: string; label: string } {
   return REASONS[reason] ?? { emoji: "😭", label: reason.replace(/_/g, " ") };
@@ -115,7 +120,7 @@ function etaLabel(entry: Entry, rate: Rate | null): string {
   return `🔀 in ~${minutes(eta(entry.position, rate, entry.estimatedTimeToMerge))}`;
 }
 
-const ETA_WIDTH = "🔀 in ~".length + 1 + "10h30m".length;
+const ETA_WIDTH = stringWidth("🔀 in ~") + 1 + stringWidth("10h30m");
 
 // root paddingX (2) + panel border (2) + panel paddingX (2)
 const PANEL_CHROME = 6;
@@ -279,41 +284,30 @@ function Recently({
   loading: boolean;
   now: number;
 }) {
-  const title = showAuthor ? "ALL RECENT" : "YOUR RECENT";
-
-  if (outcomes.length === 0) {
-    if (loading) {
-      return (
-        <Panel title={title}>
-          <Box>
-            <Spinner color="cyan" />
-            <Text dimColor> looking…</Text>
-          </Box>
-        </Panel>
-      );
-    }
-    if (!error) {
-      return (
-        <Panel title={title}>
-          <Text dimColor>
-            {showAuthor
-              ? "Nothing has left the queue lately"
-              : "Nothing of yours has left the queue lately"}
-          </Text>
-        </Panel>
-      );
-    }
-    return (
-      <Panel title={title}>
+  const empty =
+    loading ? (
+      <Box>
+        <Spinner color="cyan" />
+        <Text dimColor> looking…</Text>
+      </Box>
+    ) : error ? (
+      <>
         <Text color="red">✗ {error.message}</Text>
         {error instanceof SetupError && error.hint[0] ? (
           <Text dimColor>{error.hint[0]}</Text>
         ) : null}
-      </Panel>
+      </>
+    ) : (
+      <Text dimColor>
+        {showAuthor
+          ? "Nothing has left the queue lately"
+          : "Nothing of yours has left the queue lately"}
+      </Text>
     );
-  }
+
   return (
-    <Panel title={title}>
+    <Panel title={showAuthor ? "ALL RECENT" : "YOUR RECENT"}>
+      {outcomes.length === 0 ? empty : null}
       {outcomes.map((outcome) => {
         const merged = outcome.kind === "merged";
         const reason = reasonOf(outcome.reason);
@@ -458,9 +452,28 @@ const Badge = React.memo(function Badge() {
   );
 });
 
-const CONSEQUENCE: Record<Action, string> = {
-  eject: "Discards the checks it has run. You can queue it again afterwards, from the back.",
-  jump: "It leaves the queue and rejoins at the front, so its checks start again and everything ahead of it waits longer.",
+const ACTIONS: Record<Action, { accent: string; verb: string; question: string; consequence: string }> = {
+  eject: {
+    accent: "red",
+    verb: "Eject",
+    question: "Take this out of the merge queue?",
+    consequence: "Discards the checks it has run. You can queue it again afterwards, from the back.",
+  },
+  jump: {
+    accent: "yellow",
+    verb: "Jump",
+    question: "Send this to the front of the queue?",
+    consequence:
+      "It leaves the queue and rejoins at the front, so its checks start again and everything ahead of it waits longer.",
+  },
+};
+
+export type Confirming = {
+  action: Action;
+  entry: Entry;
+  focused: boolean;
+  pending: boolean;
+  error: Error | null;
 };
 
 // Brackets so the one you are not on still reads as a button rather than as
@@ -489,31 +502,18 @@ function Button({
 }
 
 function Confirm({
-  action,
-  entry,
+  confirm,
   depth,
   width,
-  confirmFocused,
-  pending,
-  error,
 }: {
-  action: Action;
-  entry: Entry;
+  confirm: Confirming;
   depth: number;
   width: number;
-  confirmFocused: boolean;
-  pending: boolean;
-  error: Error | null;
 }) {
-  const eject = action === "eject";
-  const accent = eject ? "red" : "yellow";
-  const verb = eject ? "Eject" : "Jump";
-  const question = eject
-    ? "Take this out of the merge queue?"
-    : "Send this to the front of the queue?";
+  const { action, entry, focused, pending, error } = confirm;
+  const { accent, verb, question, consequence } = ACTIONS[action];
 
   const card = Math.min(72, Math.max(48, width - 8));
-  const inner = card - 4;
 
   return (
     // Anchored where the main view starts, under the same rule, so answering this
@@ -549,8 +549,8 @@ function Confirm({
             </Box>
           </Box>
 
-          <Box marginTop={1} width={inner}>
-            <Text dimColor>{CONSEQUENCE[action]}</Text>
+          <Box marginTop={1}>
+            <Text dimColor>{consequence}</Text>
           </Box>
 
           <Box marginTop={1}>
@@ -565,8 +565,8 @@ function Confirm({
               </Text>
             ) : (
               <Box>
-                <Button label="Cancel" focused={!confirmFocused} />
-                <Button label={verb} focused={confirmFocused} color={accent} />
+                <Button label="Cancel" focused={!focused} />
+                <Button label={verb} focused={focused} color={accent} />
               </Box>
             )}
           </Box>
@@ -611,10 +611,10 @@ export default function App({
   const [now, setNow] = useState(Date.now());
   const [showAll, setShowAll] = useState(all);
   const [selection, setSelection] = useState(0);
-  const [confirming, setConfirming] = useState<{ action: Action; entry: Entry } | null>(null);
-  const [confirmFocused, setConfirmFocused] = useState(false);
-  const [acting, setActing] = useState(false);
-  const [actionError, setActionError] = useState<Error | null>(null);
+  // One piece of state, so focus and errors cannot outlive the dialog that owns
+  // them. Kept apart, a successful action left the destructive button focused and
+  // the next dialog opened with it already selected.
+  const [confirm, setConfirm] = useState<Confirming | null>(null);
 
   const loadOutcomes = useCallback(
     () => fetchOutcomes({ ...target, login: showAll ? undefined : viewer }),
@@ -666,84 +666,90 @@ export default function App({
 
   const stale = updatedAt !== null && now - updatedAt.getTime() > 30_000;
   const entries = queue?.entries ?? [];
+  const depth = queue?.totalCount ?? 0;
   const mine = entries.filter((entry) => entry.pullRequest.author?.login === viewer);
   const buildWindow = queue?.maximumEntriesToBuild ?? 0;
-  const busy = busyness(queue?.totalCount ?? 0);
+  const busy = busyness(depth);
 
   const recent = outcomes.slice(0, RECENT_LIMIT);
-  const selectable: { number: number; outcome: Outcome | null }[] = [
-    ...mine.map((entry) => ({ number: entry.pullRequest.number, outcome: null })),
-    ...recent.map((outcome) => ({ number: outcome.number, outcome })),
+  // Each row carries whatever it came from, so nothing has to be looked up again
+  // by number afterwards. Only queue entries carry one, and only your own are in
+  // the list — being wrong about somebody else's pull request costs them their
+  // afternoon.
+  const selectable: { number: number; entry: Entry | null; outcome: Outcome | null }[] = [
+    ...mine.map((entry) => ({ number: entry.pullRequest.number, entry, outcome: null })),
+    ...recent.map((outcome) => ({ number: outcome.number, entry: null, outcome })),
   ];
   const selected =
     selectable.length === 0
       ? null
       : selectable[Math.min(selection, selectable.length - 1)]!;
-  const selectedEntry = selected?.outcome === null ? selected.number : null;
+  const actionable = selected?.entry ?? null;
+  const selectedEntry = actionable?.pullRequest.number ?? null;
   const selectedOutcome = selected?.outcome ?? null;
 
-  // The entry the queue actions would apply to: yours, and still in the queue.
-  // Restricted to your own while the behaviour of jumping is unverified — being
-  // wrong about somebody else's pull request costs them their afternoon.
-  const actionable = mine.find((entry) => entry.pullRequest.number === selectedEntry) ?? null;
+  // Dismissing the dialog aborts the attempt, so a jump that is waiting to rejoin
+  // the queue does not land after somebody has cancelled it.
+  const attempt = useRef<AbortController | null>(null);
 
   const run = useCallback(
-    async (action: Action, entry: Entry) => {
-      setActing(true);
-      setActionError(null);
+    async (pending: Confirming) => {
+      attempt.current?.abort();
+      const controller = new AbortController();
+      attempt.current = controller;
+
+      setConfirm({ ...pending, pending: true, error: null });
       try {
-        await act({ token: target.token, action, pullRequestId: entry.pullRequest.id });
-        setConfirming(null);
+        await act({
+          token: target.token,
+          action: pending.action,
+          pullRequestId: pending.entry.pullRequest.id,
+          signal: controller.signal,
+        });
+        setConfirm(null);
       } catch (caught) {
-        setActionError(caught as Error);
-      } finally {
-        setActing(false);
+        if (controller.signal.aborted) return;
+        setConfirm({ ...pending, pending: false, error: caught as Error });
       }
     },
     [target.token],
   );
 
   const dismiss = useCallback(() => {
-    setConfirming(null);
-    setActionError(null);
-    setConfirmFocused(false);
+    attempt.current?.abort();
+    setConfirm(null);
   }, []);
 
   useInput((input, key) => {
-    if (confirming) {
-      if (acting) return;
+    if (confirm) {
+      if (confirm.pending) return;
       if (key.escape || input === "q") return dismiss();
-      if (actionError) return;
+      if (confirm.error) return;
 
-      // Focus starts on leaving it alone, so a reflex return is the safe answer.
-      if (key.leftArrow || key.upArrow) setConfirmFocused(false);
-      if (key.rightArrow || key.downArrow || key.tab) setConfirmFocused(true);
-      if (key.return && confirmFocused) void run(confirming.action, confirming.entry);
-      if (key.return && !confirmFocused) dismiss();
+      // Focus starts on cancel, so a reflex return is the safe answer.
+      if (key.leftArrow || key.upArrow) return setConfirm({ ...confirm, focused: false });
+      if (key.rightArrow || key.downArrow || key.tab) return setConfirm({ ...confirm, focused: true });
+      if (key.return) return confirm.focused ? void run(confirm) : dismiss();
       return;
     }
 
-    if (input === "q" || key.escape || (key.ctrl && input === "c")) exit();
-    if (input === "a") setShowAll((value) => !value);
-    if (key.downArrow) setSelection((value) => Math.min(value + 1, Math.max(0, selectable.length - 1)));
-    if (key.upArrow) setSelection((value) => Math.max(0, value - 1));
-    if (key.return && selected) openUrl(pullRequestUrl(target.owner, target.name, selected.number));
-    if (input === "o" && queue) openUrl(queue.url);
-    if (input === "e" && actionable) setConfirming({ action: "eject", entry: actionable });
-    if (input === "j" && actionable) setConfirming({ action: "jump", entry: actionable });
+    if (input === "q" || key.escape || (key.ctrl && input === "c")) return exit();
+    if (input === "a") return setShowAll((value) => !value);
+    if (key.downArrow)
+      return setSelection((value) => Math.min(value + 1, Math.max(0, selectable.length - 1)));
+    if (key.upArrow) return setSelection((value) => Math.max(0, value - 1));
+    if (key.return && selected)
+      return openUrl(pullRequestUrl(target.owner, target.name, selected.number));
+    if (input === "o" && queue) return openUrl(queue.url);
+    if (input === "e" && actionable)
+      return setConfirm({ action: "eject", entry: actionable, focused: false, pending: false, error: null });
+    if (input === "j" && actionable)
+      return setConfirm({ action: "jump", entry: actionable, focused: false, pending: false, error: null });
   });
 
-  if (confirming) {
+  if (confirm) {
     return (
-      <Confirm
-        action={confirming.action}
-        entry={confirming.entry}
-        depth={queue?.totalCount ?? 0}
-        width={width}
-        confirmFocused={confirmFocused}
-        pending={acting}
-        error={actionError}
-      />
+      <Confirm confirm={confirm} depth={depth} width={width} />
     );
   }
 
