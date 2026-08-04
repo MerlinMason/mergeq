@@ -493,7 +493,6 @@ function Confirm({
   entry,
   depth,
   width,
-  rows,
   confirmFocused,
   pending,
   error,
@@ -502,7 +501,6 @@ function Confirm({
   entry: Entry;
   depth: number;
   width: number;
-  rows: number;
   confirmFocused: boolean;
   pending: boolean;
   error: Error | null;
@@ -518,10 +516,12 @@ function Confirm({
   const inner = card - 4;
 
   return (
-    // Centred rather than pinned to a corner: it is the whole screen while it is
-    // up, and should look like it meant to be.
-    <Box height={rows - 1} flexDirection="column" justifyContent="center" alignItems="center">
-      <Box width={card} flexDirection="column">
+    // Anchored where the main view starts, under the same rule, so answering this
+    // does not move the whole display.
+    <Box flexDirection="column" paddingX={1} paddingTop={1}>
+      <Rule width={width} />
+
+      <Box marginTop={1} width={card} flexDirection="column">
         <TitledBox
           borderStyle="round"
           borderColor={accent}
@@ -572,10 +572,8 @@ function Confirm({
           </Box>
         </TitledBox>
 
-        <Box marginTop={1} justifyContent="center">
-          <Text dimColor>
-            {error ? "esc go back" : "←→ choose · ⏎  select · y or n · esc cancel"}
-          </Text>
+        <Box marginTop={1}>
+          <Text dimColor>{error ? "esc go back" : "←→ choose · ⏎  select · esc cancel"}</Text>
         </Box>
       </Box>
     </Box>
@@ -608,7 +606,7 @@ export default function App({
   all: boolean;
 }) {
   const { exit } = useApp();
-  const { columns: width, rows } = useWindowSize();
+  const { columns: width } = useWindowSize();
   const { queue, viewer, checks, error, fetching, updatedAt } = useQueue(target, interval);
   const [now, setNow] = useState(Date.now());
   const [showAll, setShowAll] = useState(all);
@@ -714,13 +712,12 @@ export default function App({
   useInput((input, key) => {
     if (confirming) {
       if (acting) return;
-      if (key.escape || input === "n" || input === "q") return dismiss();
+      if (key.escape || input === "q") return dismiss();
       if (actionError) return;
 
       // Focus starts on leaving it alone, so a reflex return is the safe answer.
       if (key.leftArrow || key.upArrow) setConfirmFocused(false);
       if (key.rightArrow || key.downArrow || key.tab) setConfirmFocused(true);
-      if (input === "y") void run(confirming.action, confirming.entry);
       if (key.return && confirmFocused) void run(confirming.action, confirming.entry);
       if (key.return && !confirmFocused) dismiss();
       return;
@@ -743,7 +740,6 @@ export default function App({
         entry={confirming.entry}
         depth={queue?.totalCount ?? 0}
         width={width}
-        rows={rows}
         confirmFocused={confirmFocused}
         pending={acting}
         error={actionError}
