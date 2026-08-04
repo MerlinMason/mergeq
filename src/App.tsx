@@ -39,11 +39,10 @@ const RECENT_LIMIT = 6;
 
 const STARTED_AT = Date.now();
 
-// The queue actions only apply to your own entries. Rather than hide the keys
-// when they do not — which reads as the feature being absent — the line keeps
-// them and says who they are for.
+// Offered only for your own entries, so listed only when one is selected. The
+// help text lists everything.
 const keyHints = (actionable: boolean) =>
-  `↑↓ pick · ⏎  open PR · e eject · j jump${actionable ? "" : " (your own)"} · a toggle all/yours · o open queue · q quit`;
+  `↑↓ pick · ⏎  open PR${actionable ? " · e eject · j jump" : ""} · a toggle all/yours · o open queue · q quit`;
 
 export const KEY_HINTS = keyHints(true);
 
