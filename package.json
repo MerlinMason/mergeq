@@ -32,8 +32,8 @@
   },
   "scripts": {
     "dev": "bun run src/cli.tsx",
-    "bundle": "bun build src/cli.tsx --target node --outfile dist/cli.js --banner '#!/usr/bin/env node'",
-    "build": "bun build --compile src/cli.tsx --outfile dist/mergeq",
+    "bundle": "bun build src/cli.tsx --target node --production --outfile dist/cli.js --banner '#!/usr/bin/env node'",
+    "build": "bun build --compile --production src/cli.tsx --outfile dist/mergeq",
     "check": "tsc --noEmit",
     "prepublishOnly": "bun run check && bun run bundle"
   },
