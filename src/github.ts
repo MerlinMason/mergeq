@@ -246,15 +246,26 @@ export async function fetchOutcomes(opts: {
   return outcomes.sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, OUTCOME_FETCH_LIMIT);
 }
 
+// A gap longer than this means the queue drained, not that it was slow.
+const IDLE_GAP_CEILING_MINUTES = 30;
+
+const RATE_WINDOW_HOURS = 24;
+const RATE_MIN_SAMPLE = 5;
+
 export async function fetchRate(opts: {
   token: string;
   owner: string;
   name: string;
 }): Promise<Rate | null> {
+  const since = new Date(Date.now() - RATE_WINDOW_HOURS * 3600_000).toISOString().slice(0, 19) + "Z";
+
   const data = await graphql<{ search: { nodes: { mergedAt: string | null }[] } }>(
     opts.token,
-    `query($q:String!){ search(query:$q, type:ISSUE, first:50){ nodes{ ... on PullRequest { mergedAt } } } }`,
-    { q: `repo:${opts.owner}/${opts.name} is:pr is:merged sort:updated-desc` },
+    `query($q:String!){ search(query:$q, type:ISSUE, first:100){ nodes{ ... on PullRequest { mergedAt } } } }`,
+    // sort:updated-desc orders by update time, so without the merged:>= bound a
+    // stale PR picking up a comment displaces a real merge and stretches the
+    // window the rate is measured over.
+    { q: `repo:${opts.owner}/${opts.name} is:pr is:merged merged:>=${since} sort:updated-desc` },
   );
 
   const times = data.search.nodes
@@ -262,16 +273,19 @@ export async function fetchRate(opts: {
     .filter((t) => t > 0)
     .sort((a, b) => b - a);
 
-  if (times.length < 5) return null;
+  if (times.length < RATE_MIN_SAMPLE) return null;
 
-  const gaps: number[] = [];
-  for (let i = 1; i < times.length; i++) gaps.push(times[i - 1]! - times[i]!);
-  gaps.sort((a, b) => a - b);
+  // The queue merges in batches, so most gaps are the milliseconds between two
+  // PRs of the same batch: a median lands inside one and reports a rate the
+  // queue never achieves.
+  const ceiling = IDLE_GAP_CEILING_MINUTES * 60_000;
+  let total = 0;
+  for (let i = 1; i < times.length; i++) total += Math.min(times[i - 1]! - times[i]!, ceiling);
 
-  const median = gaps[Math.floor(gaps.length / 2)]!;
-  if (median <= 0) return null;
+  const gapMinutes = total / (times.length - 1) / 60_000;
+  if (gapMinutes <= 0) return null;
 
-  return { gapMinutes: median / 60000 };
+  return { gapMinutes };
 }
 
 export type Action = "eject" | "jump";
