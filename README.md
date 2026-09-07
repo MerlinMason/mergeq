@@ -57,28 +57,10 @@ installing `terminal-notifier` avoids that. `MERGEQ_NOTIFY=off` silences them.
 
 ## Where the estimate comes from
 
-Your wait is your place in the queue times how long one merge takes. GitHub
-offers its own figure, about 1.7 minutes per place, but on a busy repository
-merges really came about three minutes apart — so its guess was roughly twice as
-fast as real life.
-
-Working out how long one merge takes has a trap in it. GitHub merges several
-pull requests at the same moment, in batches. Time the gap from one merge to the
-next and most of those gaps are almost nothing, because they are pull requests
-from the same batch landing together.
-
-Take the middle gap and you get one of those near-zero numbers. That is what
-this used to do, and with 21 pull requests waiting it promised everyone "less
-than a minute" when the real wait was about an hour.
-
-So it averages the gaps instead, over the last 24 hours. An average still counts
-the long waits between one batch and the next, so it reflects the pace you
-actually get.
-
-Averages have a trap of their own: a quiet night leaves one enormous gap that
-drags the estimate far too slow. So any gap longer than 30 minutes counts as 30,
-because a gap that long means nobody was queueing, not that the queue was slow.
-With fewer than five merges to learn from, it falls back to GitHub's figure.
+GitHub provide their own estimates for merge times which seem inaccurate and 
+often overly optimistic. Instead of relying on their numbers the estimated merge
+times is calculated by observing and averaging recent merge times within your
+repo.
 
 ## Development
 
