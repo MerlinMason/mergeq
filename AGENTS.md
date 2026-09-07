@@ -79,8 +79,13 @@ const lines = frame.replace(/\x1b\]8;;[^\x07]*\x07/g, "")
   default and undocumented. The error is the interface.
 - The outcomes query fetches 50 because `sort:updated-desc` surfaces mostly open
   review with no queue history; at 10 it returned nothing on a busy repository.
-- The merge rate is a median of consecutive gaps. A mean read three times too slow
-  on a real repository — merges aren't evenly spread and one stale row poisons it.
+- The merge rate is the average gap between merges over 24 hours, with each gap
+  counted as at most 30 minutes. Don't switch it back to a median. GitHub merges
+  pull requests in batches, so most gaps are the split second between two landing
+  together, and a median picks one of those and promises a wait of almost nothing.
+  The average used to read too slow for two reasons, both now fixed: quiet periods
+  (the 30 minute cap) and old pull requests pulled into the sample by a recent
+  comment (the `merged:>=` bound).
 
 ## Preferences
 

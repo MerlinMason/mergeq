@@ -246,7 +246,7 @@ export async function fetchOutcomes(opts: {
   return outcomes.sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, OUTCOME_FETCH_LIMIT);
 }
 
-// A gap longer than this means the queue drained, not that it was slow.
+// A gap longer than this means nobody was queueing, not that the queue was slow.
 const IDLE_GAP_CEILING_MINUTES = 30;
 
 const RATE_WINDOW_HOURS = 24;
@@ -262,9 +262,9 @@ export async function fetchRate(opts: {
   const data = await graphql<{ search: { nodes: { mergedAt: string | null }[] } }>(
     opts.token,
     `query($q:String!){ search(query:$q, type:ISSUE, first:100){ nodes{ ... on PullRequest { mergedAt } } } }`,
-    // sort:updated-desc orders by update time, so without the merged:>= bound a
-    // stale PR picking up a comment displaces a real merge and stretches the
-    // window the rate is measured over.
+    // sort:updated-desc sorts by when a pull request was last touched, not when
+    // it merged. Without merged:>=, an old one with a recent comment lands in
+    // the sample and stretches the window.
     { q: `repo:${opts.owner}/${opts.name} is:pr is:merged merged:>=${since} sort:updated-desc` },
   );
 
@@ -275,9 +275,9 @@ export async function fetchRate(opts: {
 
   if (times.length < RATE_MIN_SAMPLE) return null;
 
-  // The queue merges in batches, so most gaps are the milliseconds between two
-  // PRs of the same batch: a median lands inside one and reports a rate the
-  // queue never achieves.
+  // GitHub merges in batches, so most gaps are the split second between two pull
+  // requests landing together. A median picks one of those and promises a wait of
+  // almost nothing.
   const ceiling = IDLE_GAP_CEILING_MINUTES * 60_000;
   let total = 0;
   for (let i = 1; i < times.length; i++) total += Math.min(times[i - 1]! - times[i]!, ceiling);
