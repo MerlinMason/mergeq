@@ -92,7 +92,7 @@ const NOTHING_TO_REVIEW = [
   "No reviews in the pile — dangerously caught up 🫡",
   "Review queue empty — go and touch some grass 🌱",
   "Nobody needs you right now. Devastating 💅",
-  "Zero reviews waiting — suspiciously unemployed behaviour 😌",
+  "Zero reviews waiting — unemployed behaviour 😌",
   "Not a single review to your name — unbothered, moisturised 🧴",
 ];
 
