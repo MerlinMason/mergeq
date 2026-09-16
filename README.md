@@ -11,7 +11,8 @@ That pipe lights up when something of yours is about to move down it: green
 for an approved pull request waiting to be queued, cyan when one of yours is
 next to land.
 
-<img width="833" height="412" alt="mergequeue watching a merge queue" src="https://github.com/user-attachments/assets/89f42722-35ac-499a-a84f-36af8bcc8dba" />
+<img width="556" height="583" alt="image" src="https://github.com/user-attachments/assets/53342cb7-745f-44d8-8c3d-38636854f62a" />
+
 
 ## Install
 
