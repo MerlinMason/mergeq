@@ -1,7 +1,8 @@
 # mergeq
 
 Watch a GitHub merge queue from your terminal: where your pull requests are in
-it, what is holding them up, and when they will land.
+it, what is holding them up, and when they will land. It also lists the pull
+requests waiting on your review.
 
 <img width="833" height="412" alt="mergequeue watching a merge queue" src="https://github.com/user-attachments/assets/89f42722-35ac-499a-a84f-36af8bcc8dba" />
 
@@ -46,10 +47,34 @@ repository, so `export MERGEQ_REPO=owner/name` saves repeating it.
 
 `$GH_TOKEN` or `$GITHUB_TOKEN` override `gh` when set. `NO_COLOR` is honoured.
 
+Under `--as`, review requests made to somebody's teams are not listed — GitHub
+only resolves those for the account asking.
+
+## To review
+
+The second panel is everything open in the repository that is waiting on you,
+including requests made to a team you are in. Drafts are left out.
+
+Longest wait first, because that is the one somebody has given up on. Each row
+carries the author, the diff size, how long they have waited, and one status —
+the thing worth knowing before you open it:
+
+| | |
+|---|---|
+| `● ready` | green, nobody has reviewed it, it is yours |
+| `◐ building` | checks still running |
+| `✗ ci red` | a check is failing, so they are probably still working |
+| `± changes` | somebody has already asked for changes |
+| `✓ approved` | already approved, so it can land without you |
+
+The columns give way to the title as the terminal narrows: the diff size goes
+first, then the author.
+
 ## Notifications
 
 You get a desktop notification when one of your pull requests merges or is
-thrown out — only yours, and only for things that happen while it is running.
+thrown out, and when somebody asks you for a review — only yours, and only for
+things that happen while it is running.
 
 Most terminals raise these themselves. Where they cannot, macOS does it through
 Script Editor, which needs to be allowed under System Settings › Notifications;

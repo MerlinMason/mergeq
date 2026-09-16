@@ -15,6 +15,7 @@ import {
   act,
   fetchOutcomes,
   fetchRate,
+  fetchReviews,
   outcomeKey,
   type Action,
   type Checks,
@@ -22,6 +23,7 @@ import {
   type EntryState,
   type Outcome,
   type Rate,
+  type Review,
 } from "./github.js";
 
 const STATES: Record<EntryState, { glyph: string; color: string; label: string }> = {
@@ -35,8 +37,10 @@ const STATES: Record<EntryState, { glyph: string; color: string; label: string }
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 const NO_OUTCOMES: Outcome[] = [];
+const NO_REVIEWS: Review[] = [];
 
 const RECENT_LIMIT = 6;
+const REVIEW_LIMIT = 6;
 
 const STARTED_AT = Date.now();
 
@@ -264,6 +268,145 @@ function Mine({
         </Box>
       ) : null}
     </Box>
+  );
+}
+
+const REVIEW_STATES = {
+  broken: { glyph: "✗", label: "ci red", color: "red", dim: false },
+  changes: { glyph: "±", label: "changes", color: "yellow", dim: false },
+  approved: { glyph: "✓", label: "approved", color: "green", dim: true },
+  building: { glyph: "◐", label: "building", color: "yellow", dim: true },
+  ready: { glyph: "●", label: "ready", color: "green", dim: false },
+};
+
+// The one thing worth knowing before you open it: whether opening it now would
+// be wasted. A red build or changes already requested means they are still
+// working; an approval means it can land without you.
+function reviewState(review: Review) {
+  if (review.checks === "failing") return REVIEW_STATES.broken;
+  if (review.decision === "CHANGES_REQUESTED") return REVIEW_STATES.changes;
+  if (review.decision === "APPROVED") return REVIEW_STATES.approved;
+  if (review.checks === "running") return REVIEW_STATES.building;
+  return REVIEW_STATES.ready;
+}
+
+const REVIEW_STATUS_WIDTH =
+  stringWidth("● ") + Math.max(...Object.values(REVIEW_STATES).map((s) => stringWidth(s.label)));
+
+const AUTHOR_WIDTH = 12;
+const AGE_WIDTH = 4;
+
+// A title truncated to a handful of words says nothing, so the columns beside it
+// are given up in order of how much each earns its space.
+const TITLE_FLOOR = 24;
+
+const DAY = 86_400_000;
+
+function waitColor(waited: number): string {
+  if (waited > 3 * DAY) return "red";
+  if (waited > DAY) return "yellow";
+  return "gray";
+}
+
+function lines(count: number): string {
+  return count < 1000 ? String(count) : `${(count / 1000).toFixed(1)}k`;
+}
+
+const SIZE_WIDTH = stringWidth("+99.9k -99.9k");
+
+function ToReview({
+  reviews,
+  repo,
+  selected,
+  error,
+  loading,
+  now,
+  inner,
+}: {
+  reviews: Review[];
+  repo: { owner: string; name: string };
+  selected: Review | null;
+  error: Error | null;
+  loading: boolean;
+  now: number;
+  inner: number;
+}) {
+  const shown = reviews.slice(0, REVIEW_LIMIT);
+  const hidden = reviews.length - shown.length;
+
+  let spare = inner - (4 + 8 + 2 + AGE_WIDTH + 2 + REVIEW_STATUS_WIDTH) - TITLE_FLOOR;
+  const withAuthor = spare >= AUTHOR_WIDTH + 2;
+  if (withAuthor) spare -= AUTHOR_WIDTH + 2;
+  const withSize = spare >= SIZE_WIDTH + 2;
+
+  const empty = loading ? (
+    <Box>
+      <Spinner color="cyan" />
+      <Text dimColor> looking…</Text>
+    </Box>
+  ) : error ? (
+    <>
+      <Text color="red">✗ {error.message}</Text>
+      {error instanceof SetupError && error.hint[0] ? <Text dimColor>{error.hint[0]}</Text> : null}
+    </>
+  ) : (
+    <Text dimColor>Nobody is waiting on you — inbox zero, king 🧘</Text>
+  );
+
+  return (
+    <Panel title={reviews.length > 0 ? `TO REVIEW · ${reviews.length}` : "TO REVIEW"}>
+      {shown.length === 0 ? empty : null}
+      {shown.map((review) => {
+        const state = reviewState(review);
+        const here = review === selected;
+        const waited = now - review.requestedAt.getTime();
+        return (
+          <Box key={review.number}>
+            <Box width={4} flexShrink={0}>
+              <Text color="cyan" bold>
+                {here ? "▸" : " "}
+              </Text>
+            </Box>
+            <PrLink repo={repo} number={review.number} width={8} bold={here} underline={here} />
+            <Box flexGrow={1} flexShrink={1} minWidth={0} marginRight={2}>
+              <Text wrap="truncate" bold={here}>
+                {review.title}
+              </Text>
+            </Box>
+            {withAuthor ? (
+              <Box width={AUTHOR_WIDTH} marginRight={2} flexShrink={0}>
+                <Text dimColor wrap="truncate">
+                  {review.author}
+                </Text>
+              </Box>
+            ) : null}
+            {withSize ? (
+              <Box width={SIZE_WIDTH} marginRight={2} flexShrink={0} justifyContent="flex-end">
+                <Text>
+                  <Text color="green">+{lines(review.additions)}</Text>
+                  <Text color="red"> -{lines(review.deletions)}</Text>
+                </Text>
+              </Box>
+            ) : null}
+            <Box width={AGE_WIDTH} marginRight={2} flexShrink={0} justifyContent="flex-end">
+              <Text color={waitColor(waited)} bold={waited > 3 * DAY}>
+                {ago(review.requestedAt, now)}
+              </Text>
+            </Box>
+            <Box width={REVIEW_STATUS_WIDTH} flexShrink={0}>
+              <Text color={state.color} dimColor={state.dim} wrap="truncate">
+                {state.glyph} {state.label}
+              </Text>
+            </Box>
+          </Box>
+        );
+      })}
+      {hidden > 0 ? (
+        <Box marginLeft={4}>
+          <Text dimColor>…and {hidden} more</Text>
+        </Box>
+      ) : null}
+    </Panel>
   );
 }
 
@@ -621,14 +764,21 @@ export default function App({
     [target, viewer, showAll],
   );
   const loadRate = useCallback(() => fetchRate(target), [target]);
+  const loadReviews = useCallback(
+    () => fetchReviews({ ...target, login: viewer, self: !target.as }),
+    [target, viewer],
+  );
 
   const { data: outcomeData, error: outcomeError } = usePoll(
     viewer ? loadOutcomes : null,
     60_000,
   );
   const { data: rate } = usePoll(loadRate, 300_000);
+  const { data: reviewData, error: reviewError } = usePoll(viewer ? loadReviews : null, 60_000);
   const outcomes = outcomeData ?? NO_OUTCOMES;
   const outcomesLoading = Boolean(viewer) && outcomeData === null && !outcomeError;
+  const reviews = reviewData ?? NO_REVIEWS;
+  const reviewsLoading = Boolean(viewer) && reviewData === null && !reviewError;
 
   const seen = useRef<Set<string> | null>(null);
 
@@ -659,6 +809,24 @@ export default function App({
     }
   }, [outcomes, viewer]);
 
+  const asked = useRef<Set<number> | null>(null);
+
+  useEffect(() => {
+    if (reviewData === null) return;
+
+    if (asked.current === null) {
+      asked.current = new Set(reviewData.map((review) => review.number));
+      return;
+    }
+
+    for (const review of reviewData) {
+      if (asked.current.has(review.number)) continue;
+      asked.current.add(review.number);
+      if (review.requestedAt.getTime() < STARTED_AT) continue;
+      notify(`👀 #${review.number} wants your review`, `${review.author} — ${review.title}`);
+    }
+  }, [reviewData]);
+
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(id);
@@ -676,9 +844,21 @@ export default function App({
   // by number afterwards. Only queue entries carry one, and only your own are in
   // the list — being wrong about somebody else's pull request costs them their
   // afternoon.
-  const selectable: { number: number; entry: Entry | null; outcome: Outcome | null }[] = [
-    ...mine.map((entry) => ({ number: entry.pullRequest.number, entry, outcome: null })),
-    ...recent.map((outcome) => ({ number: outcome.number, entry: null, outcome })),
+  const toReview = reviews.slice(0, REVIEW_LIMIT);
+  const selectable: {
+    number: number;
+    entry: Entry | null;
+    review: Review | null;
+    outcome: Outcome | null;
+  }[] = [
+    ...mine.map((entry) => ({
+      number: entry.pullRequest.number,
+      entry,
+      review: null,
+      outcome: null,
+    })),
+    ...toReview.map((review) => ({ number: review.number, entry: null, review, outcome: null })),
+    ...recent.map((outcome) => ({ number: outcome.number, entry: null, review: null, outcome })),
   ];
   const selected =
     selectable.length === 0
@@ -687,6 +867,7 @@ export default function App({
   const actionable = selected?.entry ?? null;
   const selectedEntry = actionable?.pullRequest.number ?? null;
   const selectedOutcome = selected?.outcome ?? null;
+  const selectedReview = selected?.review ?? null;
 
   // Dismissing the dialog aborts the attempt, so a jump that is waiting to rejoin
   // the queue does not land after somebody has cancelled it.
@@ -884,6 +1065,16 @@ export default function App({
           <Empty outcomes={outcomes} now={now} />
         ) : null}
       </Panel>
+
+      <ToReview
+        reviews={reviews}
+        repo={target}
+        selected={selectedReview}
+        error={reviewError}
+        loading={reviewsLoading}
+        now={now}
+        inner={width - PANEL_CHROME}
+      />
 
       <Recently
         outcomes={recent}

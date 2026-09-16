@@ -83,6 +83,19 @@ export type Rate = {
   gapMinutes: number;
 };
 
+export type ReviewChecks = "passing" | "failing" | "running" | null;
+
+export type Review = {
+  number: number;
+  title: string;
+  author: string;
+  additions: number;
+  deletions: number;
+  requestedAt: Date;
+  decision: "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" | null;
+  checks: ReviewChecks;
+};
+
 const OUTCOME_FETCH_LIMIT = 12;
 
 export function outcomeKey(outcome: Outcome): string {
@@ -244,6 +257,86 @@ export async function fetchOutcomes(opts: {
   }
 
   return outcomes.sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, OUTCOME_FETCH_LIMIT);
+}
+
+const REVIEW_FETCH_LIMIT = 25;
+
+function rollup(state: string | null | undefined): ReviewChecks {
+  if (!state) return null;
+  if (state === "FAILURE" || state === "ERROR") return "failing";
+  if (state === "SUCCESS") return "passing";
+  return "running";
+}
+
+export async function fetchReviews(opts: {
+  token: string;
+  owner: string;
+  name: string;
+  login: string;
+  self: boolean;
+}): Promise<Review[]> {
+  type Requested = {
+    createdAt: string;
+    requestedReviewer: { __typename: string; login?: string } | null;
+  };
+
+  type Node = {
+    number: number;
+    title: string;
+    createdAt: string;
+    additions: number;
+    deletions: number;
+    author: { login: string } | null;
+    reviewDecision: Review["decision"];
+    commits: { nodes: { commit: { statusCheckRollup: { state: string } | null } }[] };
+    requests: { nodes: Requested[] };
+  };
+
+  const data = await graphql<{ search: { nodes: Node[] } }>(
+    opts.token,
+    `query($q:String!){ search(query:$q, type:ISSUE, first:${REVIEW_FETCH_LIMIT}){ nodes{ ... on PullRequest {
+      number title createdAt additions deletions
+      author{ login }
+      reviewDecision
+      commits(last:1){ nodes{ commit{ statusCheckRollup{ state } } } }
+      requests: timelineItems(last:20, itemTypes:[REVIEW_REQUESTED_EVENT]){ nodes{ ... on ReviewRequestedEvent {
+        createdAt requestedReviewer{ __typename ... on User { login } }
+      }}}
+    }}}}`,
+    {
+      q: [
+        `repo:${opts.owner}/${opts.name}`,
+        "is:pr is:open draft:false",
+        // user-review-requested counts a request made to a team you are in;
+        // review-requested does not, but is the only one that takes a name
+        // other than your own.
+        opts.self ? "user-review-requested:@me" : `review-requested:${opts.login}`,
+        "sort:updated-desc",
+      ].join(" "),
+    },
+  );
+
+  return data.search.nodes
+    .filter((node) => node?.number)
+    .map((node) => {
+      const events = node.requests.nodes.filter((event) => event?.createdAt);
+      // Requests to a team carry the team, not you, so when nothing names you
+      // the most recent request of any kind is the closest thing to a clock.
+      const mine = events.filter((event) => event.requestedReviewer?.login === opts.login);
+      const asked = (mine.length > 0 ? mine : events).at(-1);
+
+      return {
+        number: node.number,
+        title: node.title,
+        author: node.author?.login ?? "unknown",
+        additions: node.additions,
+        deletions: node.deletions,
+        requestedAt: new Date(asked?.createdAt ?? node.createdAt),
+        decision: node.reviewDecision,
+        checks: rollup(node.commits.nodes[0]?.commit.statusCheckRollup?.state),
+      };
+    })
+    .sort((a, b) => a.requestedAt.getTime() - b.requestedAt.getTime());
 }
 
 // A gap longer than this means nobody was queueing, not that the queue was slow.
