@@ -102,6 +102,13 @@ in the repository, whoever wrote them. Ordering by what it is asking you to do
 only means anything for your own work, so this one is a feed — newest first,
 and the column beside the title carries the author rather than the reviewers.
 
+## Quexits
+
+Queue exits: what has come out the far end, merged or thrown out, newest first.
+An ejected pull request says why it left — failed, conflict, yanked — which is
+the reason the panel is not called "recently merged". `a` widens it to
+everybody's.
+
 ## Notifications
 
 You get a desktop notification when one of your pull requests merges or is

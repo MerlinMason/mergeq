@@ -637,7 +637,7 @@ function Recently({
   now: number;
 }) {
   return (
-    <Panel title={showAuthor ? "ALL RECENT" : "YOUR RECENT"}>
+    <Panel title={showAuthor ? "ALL QUEXITS" : "QUEXITS"}>
       {outcomes.length === 0 ? (
         <Fallback loading={loading} error={error}>
           {showAuthor
