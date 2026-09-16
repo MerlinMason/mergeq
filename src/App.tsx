@@ -14,16 +14,17 @@ import { version } from "../package.json" with { type: "json" };
 import {
   act,
   fetchOutcomes,
-  fetchOwn,
+  fetchPrs,
   fetchRate,
   fetchReviews,
   outcomeKey,
+  PR_FETCH_LIMIT,
   type Action,
   type Checks,
   type Entry,
   type EntryState,
   type Outcome,
-  type Own,
+  type Pr,
   type Rate,
   type Review,
 } from "./github.js";
@@ -43,7 +44,7 @@ const NO_REVIEWS: Review[] = [];
 
 const RECENT_LIMIT = 6;
 const REVIEW_LIMIT = 6;
-const OWN_LIMIT = 5;
+const PR_LIMIT = 5;
 
 const STARTED_AT = Date.now();
 
@@ -256,18 +257,20 @@ function Status({
   );
 }
 
-function More({ hidden }: { hidden: number }) {
-  if (hidden <= 0) return null;
+// null is "more than were counted" — the repository has more open pull requests
+// than one page, so saying a number would be quoting the page size back.
+function More({ hidden }: { hidden: number | null }) {
+  if (hidden !== null && hidden <= 0) return null;
   return (
     <Box marginLeft={CURSOR_WIDTH}>
-      <Text dimColor>…and {hidden} more</Text>
+      <Text dimColor>…and {hidden ?? "plenty"} more</Text>
     </Box>
   );
 }
 
 // A queue entry keeps its number one level down; everything else in a list
 // carries it directly.
-type Selectable = Entry | Own | Review | Outcome;
+type Selectable = Entry | Pr | Review | Outcome;
 
 function numberOf(item: Selectable): number {
   return "pullRequest" in item ? item.pullRequest.number : item.number;
@@ -406,7 +409,7 @@ const ROW_FIXED = CURSOR_WIDTH + NUMBER_WIDTH + GAP + AGE_WIDTH + GAP;
 // Ordered by what it is asking you to do, which is also the order the panel
 // sorts in: ship it, answer them, fix it, then the ones where waiting is the
 // only move.
-const OWN_STATES = {
+const PR_STATES = {
   approved: { rank: 0, glyph: "✓", label: "approved", color: "green", dim: false },
   changes: { rank: 1, glyph: "±", label: "changes", color: "yellow", dim: false },
   broken: { rank: 2, glyph: "✗", label: "ci red", color: "red", dim: false },
@@ -417,62 +420,70 @@ const OWN_STATES = {
 
 // A draft says draft even when its build is red: you already know, and nobody
 // is going to look at it either way.
-function ownState(own: Own) {
-  if (own.draft) return OWN_STATES.draft;
-  if (own.decision === "APPROVED") return OWN_STATES.approved;
-  if (own.decision === "CHANGES_REQUESTED") return OWN_STATES.changes;
-  if (own.checks === "failing") return OWN_STATES.broken;
-  if (own.checks === "running") return OWN_STATES.building;
-  return OWN_STATES.waiting;
+function prState(own: Pr) {
+  if (own.draft) return PR_STATES.draft;
+  if (own.decision === "APPROVED") return PR_STATES.approved;
+  if (own.decision === "CHANGES_REQUESTED") return PR_STATES.changes;
+  if (own.checks === "failing") return PR_STATES.broken;
+  if (own.checks === "running") return PR_STATES.building;
+  return PR_STATES.waiting;
 }
 
-const OWN_STATUS_WIDTH = statusWidth(Object.values(OWN_STATES));
+const PR_STATUS_WIDTH = statusWidth(Object.values(PR_STATES));
 
 function YourPrs({
   shown,
   total,
   repo,
   selected,
+  showAuthor,
   error,
   loading,
   now,
   inner,
 }: {
-  shown: Own[];
-  total: number;
+  shown: Pr[];
+  total: number | null;
   repo: { owner: string; name: string };
-  selected: Own | null;
+  selected: Pr | null;
+  showAuthor: boolean;
   error: Error | null;
   loading: boolean;
   now: number;
   inner: number;
 }) {
-  const hidden = total - shown.length;
+  const hidden = total === null ? null : total - shown.length;
   const rows = shown.map((pr) => {
-    const state = ownState(pr);
-    const nobody = state === OWN_STATES.waiting && pr.reviewers.length === 0;
-    return {
-      pr,
-      state,
-      nobody,
-      // Mostly this column says "—", so it is sized to what is in it rather than
-      // to the longest thing that could be, and the title gets the difference.
-      waiting: pr.reviewers.length > 0 ? pr.reviewers.join(" ") : nobody ? "nobody" : "—",
-    };
+    const state = prState(pr);
+    // Whose it is answers the first question about somebody else's pull request;
+    // who still owes it a review answers the first question about your own.
+    const nobody = !showAuthor && state === PR_STATES.waiting && pr.reviewers.length === 0;
+    const beside = showAuthor
+      ? pr.author
+      : pr.reviewers.length > 0
+        ? pr.reviewers.join(" ")
+        : nobody
+          ? "nobody"
+          : "—";
+    return { pr, state, nobody, beside };
   });
 
-  const reviewers = Math.min(REVIEWER_WIDTH, Math.max(0, ...rows.map((r) => stringWidth(r.waiting))));
-  const spare = inner - ROW_FIXED - OWN_STATUS_WIDTH - TITLE_FLOOR;
-  const withReviewers = spare >= reviewers + GAP;
+  // For your own, this column is mostly "—", so it is sized to what is in it
+  // rather than to the longest thing that could be, and the title gets the rest.
+  const aside = Math.min(REVIEWER_WIDTH, Math.max(0, ...rows.map((r) => stringWidth(r.beside))));
+  const spare = inner - ROW_FIXED - PR_STATUS_WIDTH - TITLE_FLOOR;
+  const withAside = spare >= aside + GAP;
+
+  const title = showAuthor ? "OPEN PRS" : "YOUR PRS";
 
   return (
-    <Panel title={total > 0 ? `YOUR PRS · ${total}` : "YOUR PRS"}>
+    <Panel title={total ? `${title} · ${total}` : title}>
       {rows.length === 0 ? (
         <Fallback loading={loading} error={error}>
           Nothing open that is not already queued
         </Fallback>
       ) : null}
-      {rows.map(({ pr, state, nobody, waiting }) => (
+      {rows.map(({ pr, state, nobody, beside }) => (
         <Box key={pr.number}>
           <RowHead
             repo={repo}
@@ -481,17 +492,17 @@ function YourPrs({
             here={pr === selected}
             dim={pr.draft}
           />
-          {withReviewers ? (
-            <Box width={reviewers} marginRight={GAP} flexShrink={0}>
+          {withAside ? (
+            <Box width={aside} marginRight={GAP} flexShrink={0}>
               <Text color={nobody ? "yellow" : undefined} dimColor wrap="truncate">
-                {waiting}
+                {beside}
               </Text>
             </Box>
           ) : null}
           <Box width={AGE_WIDTH} marginRight={GAP} flexShrink={0} justifyContent="flex-end">
             <Text dimColor>{ago(pr.updatedAt, now)}</Text>
           </Box>
-          <Status state={state} width={OWN_STATUS_WIDTH} />
+          <Status state={state} width={PR_STATUS_WIDTH} />
         </Box>
       ))}
       <More hidden={hidden} />
@@ -955,7 +966,10 @@ export default function App({
     () => fetchReviews({ ...target, login: viewer, self: !target.as }),
     [target, viewer],
   );
-  const loadOwn = useCallback(() => fetchOwn({ ...target, login: viewer }), [target, viewer]);
+  const loadPrs = useCallback(
+    () => fetchPrs({ ...target, login: showAll ? undefined : viewer }),
+    [target, viewer, showAll],
+  );
 
   const {
     data: outcomeData,
@@ -969,10 +983,10 @@ export default function App({
     loading: reviewsLoading,
   } = usePoll(viewer ? loadReviews : null, 60_000);
   const {
-    data: ownData,
-    error: ownError,
-    loading: ownLoading,
-  } = usePoll(viewer ? loadOwn : null, 60_000);
+    data: prData,
+    error: prError,
+    loading: prLoading,
+  } = usePoll(viewer ? loadPrs : null, 60_000);
   const outcomes = outcomeData ?? NO_OUTCOMES;
   const reviews = reviewData ?? NO_REVIEWS;
 
@@ -1038,34 +1052,41 @@ export default function App({
   // Once it is in the queue it belongs to the queue panel, which knows where it
   // sits and when it lands. Listing it twice would only ask which one to believe.
   const queued = new Set(entries.map((entry) => entry.pullRequest.number));
-  const own = (ownData ?? [])
-    .filter((pr) => !queued.has(pr.number))
-    .sort(
-      (a, b) =>
-        ownState(a).rank - ownState(b).rank || b.updatedAt.getTime() - a.updatedAt.getTime(),
-    );
+  const open = (prData ?? []).filter((pr) => !queued.has(pr.number));
+
+  // Sorting by what it is asking you to do only means something for your own
+  // work. Everybody's is a feed, so it keeps the newest-first order it arrived in.
+  const prs = showAll
+    ? open
+    : [...open].sort(
+        (a, b) =>
+          prState(a).rank - prState(b).rank || b.updatedAt.getTime() - a.updatedAt.getTime(),
+      );
 
   // What is poised to fall through each join, which is what lights the arrow
   // between the two panels it joins.
-  const ready = own.filter((pr) => ownState(pr) === OWN_STATES.approved).length;
+  const ready = prs.filter((pr) => prState(pr) === PR_STATES.approved).length;
   const landing = mine.some((entry) => entry.position === 1);
 
   // Sliced once, here, so a panel cannot disagree with the list the cursor walks.
   const recent = outcomes.slice(0, RECENT_LIMIT);
   const toReview = reviews.slice(0, REVIEW_LIMIT);
-  const ownShown = own.slice(0, OWN_LIMIT);
+  const prsShown = prs.slice(0, PR_LIMIT);
+  // A full page back means there are more we never saw, so any total we quote
+  // would be the page size rather than the repository's.
+  const prsCounted = (prData?.length ?? 0) < PR_FETCH_LIMIT;
 
   // Every row is the object its panel renders, so a panel asks whether it holds
   // the selection rather than matching on a number. Keep this in the order the
   // panels appear, or the cursor jumps about.
-  const selectable = [...toReview, ...ownShown, ...mine, ...recent];
+  const selectable = [...toReview, ...prsShown, ...mine, ...recent];
   const selected = selectable[Math.min(selection, selectable.length - 1)] ?? null;
 
   const actionable = mine.find((entry) => entry === selected) ?? null;
   const selectedEntry = actionable?.pullRequest.number ?? null;
   const selectedOutcome = recent.find((outcome) => outcome === selected) ?? null;
   const selectedReview = toReview.find((review) => review === selected) ?? null;
-  const selectedOwn = ownShown.find((pr) => pr === selected) ?? null;
+  const selectedPr = prsShown.find((pr) => pr === selected) ?? null;
 
   // Dismissing the dialog aborts the attempt, so a jump that is waiting to rejoin
   // the queue does not land after somebody has cancelled it.
@@ -1205,12 +1226,13 @@ export default function App({
       <Box height={1} />
 
       <YourPrs
-        shown={ownShown}
-        total={own.length}
+        shown={prsShown}
+        total={prsCounted ? prs.length : null}
+        showAuthor={showAll}
         repo={target}
-        selected={selectedOwn}
-        error={ownError}
-        loading={ownLoading}
+        selected={selectedPr}
+        error={prError}
+        loading={prLoading}
         now={now}
         inner={width - PANEL_CHROME}
       />

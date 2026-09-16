@@ -97,6 +97,11 @@ Most actionable first, so the top of the list is the next thing to do:
 Beside it are the reviewers still to answer, or `nobody` in yellow when you have
 not asked anyone, and how long it has been since anything happened.
 
+Press `a` and it becomes OPEN PRS: the five most recently touched pull requests
+in the repository, whoever wrote them. Ordering by what it is asking you to do
+only means anything for your own work, so this one is a feed — newest first,
+and the column beside the title carries the author rather than the reviewers.
+
 ## Notifications
 
 You get a desktop notification when one of your pull requests merges or is

@@ -96,9 +96,10 @@ export type Review = {
   checks: ReviewChecks;
 };
 
-export type Own = {
+export type Pr = {
   number: number;
   title: string;
+  author: string;
   draft: boolean;
   updatedAt: Date;
   decision: Review["decision"];
@@ -296,19 +297,22 @@ export async function fetchOutcomes(opts: {
   return outcomes.sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, OUTCOME_FETCH_LIMIT);
 }
 
-const OWN_FETCH_LIMIT = 20;
+export const PR_FETCH_LIMIT = 20;
 
-export async function fetchOwn(opts: {
+// Without a login this is every open pull request in the repository, newest
+// first, which is what the panel shows once you ask for everybody's.
+export async function fetchPrs(opts: {
   token: string;
   owner: string;
   name: string;
-  login: string;
-}): Promise<Own[]> {
+  login?: string;
+}): Promise<Pr[]> {
   type Node = RollupNode & {
     number: number;
     title: string;
     isDraft: boolean;
     updatedAt: string;
+    author: { login: string } | null;
     reviewDecision: Review["decision"];
     reviewRequests: {
       nodes: { requestedReviewer: { login?: string; slug?: string } | null }[];
@@ -317,18 +321,25 @@ export async function fetchOwn(opts: {
 
   const nodes = await search<Node>({
     token: opts.token,
-    first: OWN_FETCH_LIMIT,
+    first: PR_FETCH_LIMIT,
     fields: `number title isDraft updatedAt reviewDecision
+      author{ login }
       ${ROLLUP}
       reviewRequests(first:5){ nodes{ requestedReviewer{
         ... on User { login } ... on Team { slug }
       }}}`,
-    terms: [`repo:${opts.owner}/${opts.name}`, "is:pr is:open", `author:${opts.login}`, "sort:updated-desc"],
+    terms: [
+      `repo:${opts.owner}/${opts.name}`,
+      "is:pr is:open",
+      Boolean(opts.login) && `author:${opts.login}`,
+      "sort:updated-desc",
+    ],
   });
 
   return nodes.map((node) => ({
     number: node.number,
     title: node.title,
+    author: node.author?.login ?? "unknown",
     draft: node.isDraft,
     updatedAt: new Date(node.updatedAt),
     decision: node.reviewDecision,
