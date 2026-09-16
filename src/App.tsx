@@ -864,10 +864,25 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
       titleStyles={titleStyles.rectangle}
       flexDirection="column"
       paddingX={1}
-      marginTop={1}
     >
       {children}
     </TitledBox>
+  );
+}
+
+// The gap between two panels was already a blank row, so the connector that
+// makes them read as one pipeline costs no height. It earns the space by
+// lighting up when something of yours is about to move down it.
+function Flow({ label, color }: { label?: string; color?: string }) {
+  return (
+    <Box>
+      <Box width={3} flexShrink={0}>
+        <Text> </Text>
+      </Box>
+      <Text color={color} bold={Boolean(color)} dimColor={!color}>
+        ↓{label ? `  ${label}` : ""}
+      </Text>
+    </Box>
   );
 }
 
@@ -989,6 +1004,11 @@ export default function App({
         OWN_STATES.indexOf(ownState(a)) - OWN_STATES.indexOf(ownState(b)) ||
         b.updatedAt.getTime() - a.updatedAt.getTime(),
     );
+
+  // What is poised to fall through each join, which is what lights the arrow
+  // between the two panels it joins.
+  const ready = own.filter((pr) => ownState(pr) === OWN_STATE.approved).length;
+  const landing = mine.some((entry) => entry.position === 1);
 
   const toReview = reviews.slice(0, REVIEW_LIMIT);
   const selectable: {
@@ -1163,6 +1183,8 @@ export default function App({
         inner={width - PANEL_CHROME}
       />
 
+      <Flow />
+
       <YourPrs
         own={own}
         repo={target}
@@ -1171,6 +1193,11 @@ export default function App({
         loading={ownLoading}
         now={now}
         inner={width - PANEL_CHROME}
+      />
+
+      <Flow
+        label={ready > 0 ? `${ready} ready to queue` : undefined}
+        color={ready > 0 ? "green" : undefined}
       />
 
       <Panel title="QUEUE">
@@ -1251,6 +1278,11 @@ export default function App({
           <Empty outcomes={outcomes} now={now} />
         ) : null}
       </Panel>
+
+      <Flow
+        label={landing ? "yours is next" : undefined}
+        color={landing ? "cyan" : undefined}
+      />
 
       <Recently
         outcomes={recent}

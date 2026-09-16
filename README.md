@@ -5,7 +5,9 @@ it, what is holding them up, and when they will land.
 
 The panels are a pipeline, and a pull request falls down the screen as it
 progresses — somebody asks you to review one, yours wait for the same, then the
-queue, then gone.
+queue, then gone. The arrow between two panels lights up when something of
+yours is about to move down it: green for an approved pull request waiting to
+be queued, cyan when one of yours is next to land.
 
 <img width="833" height="412" alt="mergequeue watching a merge queue" src="https://github.com/user-attachments/assets/89f42722-35ac-499a-a84f-36af8bcc8dba" />
 
