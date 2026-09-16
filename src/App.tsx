@@ -474,10 +474,8 @@ function YourPrs({
   const spare = inner - ROW_FIXED - PR_STATUS_WIDTH - TITLE_FLOOR;
   const withAside = spare >= aside + GAP;
 
-  const title = showAuthor ? "OPEN PRS" : "YOUR PRS";
-
   return (
-    <Panel title={total ? `${title} · ${total}` : title}>
+    <Panel title={showAuthor ? "OPEN PRS" : "YOUR PRS"}>
       {rows.length === 0 ? (
         <Fallback loading={loading} error={error}>
           Nothing open that is not already queued
