@@ -89,12 +89,12 @@ function busyness(depth: number): { emoji: string; label: string; color: string 
 }
 
 const NOTHING_TO_REVIEW = [
-  "Nobody is waiting on you — inbox zero, king 👑",
-  "No reviews in the pile — dangerously caught up 🫡",
-  "Review queue empty — go and touch some grass 🌱",
-  "Nobody needs you right now. Devastating 💅",
-  "Zero reviews waiting — unemployed behaviour 😌",
-  "Not a single review — unbothered, moisturised 🧴",
+  "Nothing to review — inbox zero, king 👑",
+  "Nothing to review — dangerously caught up 🫡",
+  "Nothing to review — go and touch some grass 🌱",
+  "Nothing to review — nobody needs you, devastating 💅",
+  "Nothing to review — unemployed behaviour 😌",
+  "Nothing to review — unbothered, moisturised 🧴",
 ];
 
 const NOTHING_QUEUED = [
