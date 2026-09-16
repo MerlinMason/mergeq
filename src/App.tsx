@@ -1183,7 +1183,9 @@ export default function App({
         inner={width - PANEL_CHROME}
       />
 
-      <Flow />
+      {/* No arrow here: the panel above is somebody else's work, and nothing
+          crosses from it into yours. */}
+      <Box height={1} />
 
       <YourPrs
         own={own}
