@@ -998,21 +998,21 @@ export default function App({
     review: Review | null;
     outcome: Outcome | null;
   }[] = [
-    ...mine.map((entry) => ({
-      number: entry.pullRequest.number,
-      entry,
-      own: null,
-      review: null,
-      outcome: null,
-    })),
-    ...own
-      .slice(0, OWN_LIMIT)
-      .map((pr) => ({ number: pr.number, entry: null, own: pr, review: null, outcome: null })),
     ...toReview.map((review) => ({
       number: review.number,
       entry: null,
       own: null,
       review,
+      outcome: null,
+    })),
+    ...own
+      .slice(0, OWN_LIMIT)
+      .map((pr) => ({ number: pr.number, entry: null, own: pr, review: null, outcome: null })),
+    ...mine.map((entry) => ({
+      number: entry.pullRequest.number,
+      entry,
+      own: null,
+      review: null,
       outcome: null,
     })),
     ...recent.map((outcome) => ({
@@ -1151,6 +1151,28 @@ export default function App({
         </Text>
       </Box>
 
+      {/* A pull request falls down the screen as it progresses: somebody asks
+          you for one, yours wait for the same, then the queue, then gone. */}
+      <ToReview
+        reviews={reviews}
+        repo={target}
+        selected={selectedReview}
+        error={reviewError}
+        loading={reviewsLoading}
+        now={now}
+        inner={width - PANEL_CHROME}
+      />
+
+      <YourPrs
+        own={own}
+        repo={target}
+        selected={selectedOwn}
+        error={ownError}
+        loading={ownLoading}
+        now={now}
+        inner={width - PANEL_CHROME}
+      />
+
       <Panel title="QUEUE">
         <Box>
           {queue ? (
@@ -1229,26 +1251,6 @@ export default function App({
           <Empty outcomes={outcomes} now={now} />
         ) : null}
       </Panel>
-
-      <YourPrs
-        own={own}
-        repo={target}
-        selected={selectedOwn}
-        error={ownError}
-        loading={ownLoading}
-        now={now}
-        inner={width - PANEL_CHROME}
-      />
-
-      <ToReview
-        reviews={reviews}
-        repo={target}
-        selected={selectedReview}
-        error={reviewError}
-        loading={reviewsLoading}
-        now={now}
-        inner={width - PANEL_CHROME}
-      />
 
       <Recently
         outcomes={recent}

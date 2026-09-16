@@ -1,8 +1,11 @@
 # mergeq
 
 Watch a GitHub merge queue from your terminal: where your pull requests are in
-it, what is holding them up, and when they will land. It also lists your open
-pull requests that have not got there yet, and the ones waiting on your review.
+it, what is holding them up, and when they will land.
+
+The panels are a pipeline, and a pull request falls down the screen as it
+progresses — somebody asks you to review one, yours wait for the same, then the
+queue, then gone.
 
 <img width="833" height="412" alt="mergequeue watching a merge queue" src="https://github.com/user-attachments/assets/89f42722-35ac-499a-a84f-36af8bcc8dba" />
 
@@ -50,29 +53,9 @@ repository, so `export MERGEQ_REPO=owner/name` saves repeating it.
 Under `--as`, review requests made to somebody's teams are not listed — GitHub
 only resolves those for the account asking.
 
-## Your PRs
-
-Everything of yours open in the repository that has not reached the queue yet.
-A pull request leaves this panel the moment it joins the queue, where the panel
-above it can say where it sits and when it lands.
-
-Most actionable first, so the top of the list is the next thing to do:
-
-| | |
-|---|---|
-| `✓ approved` | queue it |
-| `± changes` | somebody has asked for changes |
-| `✗ ci red` | a check is failing |
-| `○ waiting` | nobody has reviewed it yet |
-| `◐ building` | checks still running |
-| `✎ draft` | a draft says draft even when its build is red |
-
-Beside it are the reviewers still to answer, or `nobody` in yellow when you have
-not asked anyone, and how long it has been since anything happened.
-
 ## To review
 
-The second panel is everything open in the repository that is waiting on you,
+The top panel is everything open in the repository that is waiting on you,
 including requests made to a team you are in. Drafts are left out.
 
 Longest wait first, because that is the one somebody has given up on. Each row
@@ -89,6 +72,26 @@ the thing worth knowing before you open it:
 
 The columns give way to the title as the terminal narrows: the diff size goes
 first, then the author.
+
+## Your PRs
+
+Everything of yours open in the repository that has not reached the queue yet.
+A pull request drops out of this panel the moment it joins the queue, into the
+panel below, which can say where it sits and when it lands.
+
+Most actionable first, so the top of the list is the next thing to do:
+
+| | |
+|---|---|
+| `✓ approved` | queue it |
+| `± changes` | somebody has asked for changes |
+| `✗ ci red` | a check is failing |
+| `○ waiting` | nobody has reviewed it yet |
+| `◐ building` | checks still running |
+| `✎ draft` | a draft says draft even when its build is red |
+
+Beside it are the reviewers still to answer, or `nobody` in yellow when you have
+not asked anyone, and how long it has been since anything happened.
 
 ## Notifications
 
