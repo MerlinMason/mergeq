@@ -1,8 +1,8 @@
 # mergeq
 
 Watch a GitHub merge queue from your terminal: where your pull requests are in
-it, what is holding them up, and when they will land. It also lists the pull
-requests waiting on your review.
+it, what is holding them up, and when they will land. It also lists your open
+pull requests that have not got there yet, and the ones waiting on your review.
 
 <img width="833" height="412" alt="mergequeue watching a merge queue" src="https://github.com/user-attachments/assets/89f42722-35ac-499a-a84f-36af8bcc8dba" />
 
@@ -49,6 +49,26 @@ repository, so `export MERGEQ_REPO=owner/name` saves repeating it.
 
 Under `--as`, review requests made to somebody's teams are not listed — GitHub
 only resolves those for the account asking.
+
+## Your PRs
+
+Everything of yours open in the repository that has not reached the queue yet.
+A pull request leaves this panel the moment it joins the queue, where the panel
+above it can say where it sits and when it lands.
+
+Most actionable first, so the top of the list is the next thing to do:
+
+| | |
+|---|---|
+| `✓ approved` | queue it |
+| `± changes` | somebody has asked for changes |
+| `✗ ci red` | a check is failing |
+| `○ waiting` | nobody has reviewed it yet |
+| `◐ building` | checks still running |
+| `✎ draft` | a draft says draft even when its build is red |
+
+Beside it are the reviewers still to answer, or `nobody` in yellow when you have
+not asked anyone, and how long it has been since anything happened.
 
 ## To review
 

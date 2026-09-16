@@ -96,6 +96,16 @@ export type Review = {
   checks: ReviewChecks;
 };
 
+export type Own = {
+  number: number;
+  title: string;
+  draft: boolean;
+  updatedAt: Date;
+  decision: Review["decision"];
+  checks: ReviewChecks;
+  reviewers: string[];
+};
+
 const OUTCOME_FETCH_LIMIT = 12;
 
 export function outcomeKey(outcome: Outcome): string {
@@ -257,6 +267,53 @@ export async function fetchOutcomes(opts: {
   }
 
   return outcomes.sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, OUTCOME_FETCH_LIMIT);
+}
+
+const OWN_FETCH_LIMIT = 20;
+
+export async function fetchOwn(opts: {
+  token: string;
+  owner: string;
+  name: string;
+  login: string;
+}): Promise<Own[]> {
+  type Node = {
+    number: number;
+    title: string;
+    isDraft: boolean;
+    updatedAt: string;
+    reviewDecision: Review["decision"];
+    commits: { nodes: { commit: { statusCheckRollup: { state: string } | null } }[] };
+    reviewRequests: {
+      nodes: { requestedReviewer: { login?: string; slug?: string } | null }[];
+    };
+  };
+
+  const data = await graphql<{ search: { nodes: Node[] } }>(
+    opts.token,
+    `query($q:String!){ search(query:$q, type:ISSUE, first:${OWN_FETCH_LIMIT}){ nodes{ ... on PullRequest {
+      number title isDraft updatedAt reviewDecision
+      commits(last:1){ nodes{ commit{ statusCheckRollup{ state } } } }
+      reviewRequests(first:5){ nodes{ requestedReviewer{
+        ... on User { login } ... on Team { slug }
+      }}}
+    }}}}`,
+    { q: `repo:${opts.owner}/${opts.name} is:pr is:open author:${opts.login} sort:updated-desc` },
+  );
+
+  return data.search.nodes
+    .filter((node) => node?.number)
+    .map((node) => ({
+      number: node.number,
+      title: node.title,
+      draft: node.isDraft,
+      updatedAt: new Date(node.updatedAt),
+      decision: node.reviewDecision,
+      checks: rollup(node.commits.nodes[0]?.commit.statusCheckRollup?.state),
+      reviewers: node.reviewRequests.nodes
+        .map((request) => request.requestedReviewer?.login ?? request.requestedReviewer?.slug)
+        .filter((who): who is string => Boolean(who)),
+    }));
 }
 
 const REVIEW_FETCH_LIMIT = 25;

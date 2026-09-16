@@ -14,6 +14,7 @@ import { version } from "../package.json" with { type: "json" };
 import {
   act,
   fetchOutcomes,
+  fetchOwn,
   fetchRate,
   fetchReviews,
   outcomeKey,
@@ -22,6 +23,7 @@ import {
   type Entry,
   type EntryState,
   type Outcome,
+  type Own,
   type Rate,
   type Review,
 } from "./github.js";
@@ -38,9 +40,11 @@ const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", 
 
 const NO_OUTCOMES: Outcome[] = [];
 const NO_REVIEWS: Review[] = [];
+const NO_OWN: Own[] = [];
 
 const RECENT_LIMIT = 6;
 const REVIEW_LIMIT = 6;
+const OWN_LIMIT = 5;
 
 const STARTED_AT = Date.now();
 
@@ -271,6 +275,141 @@ function Mine({
   );
 }
 
+// Shared by the two list panels: cursor, number, title, then a right-hand side
+// of fixed columns.
+const AUTHOR_WIDTH = 12;
+const REVIEWER_WIDTH = 14;
+const AGE_WIDTH = 4;
+
+// A title truncated to a handful of words says nothing, so the columns beside it
+// are given up in order of how much each earns its space.
+const TITLE_FLOOR = 24;
+
+// Ordered by what it is asking you to do, which is also the order the panel
+// sorts in: ship it, answer them, fix it, then the ones where waiting is the
+// only move.
+const OWN_STATES = [
+  { key: "approved", glyph: "✓", label: "approved", color: "green", dim: false },
+  { key: "changes", glyph: "±", label: "changes", color: "yellow", dim: false },
+  { key: "broken", glyph: "✗", label: "ci red", color: "red", dim: false },
+  { key: "waiting", glyph: "○", label: "waiting", color: "cyan", dim: false },
+  { key: "building", glyph: "◐", label: "building", color: "yellow", dim: true },
+  { key: "draft", glyph: "✎", label: "draft", color: "gray", dim: true },
+] as const;
+
+const OWN_STATE = Object.fromEntries(OWN_STATES.map((state) => [state.key, state])) as Record<
+  (typeof OWN_STATES)[number]["key"],
+  (typeof OWN_STATES)[number]
+>;
+
+// A draft says draft even when its build is red: you already know, and nobody
+// is going to look at it either way.
+function ownState(own: Own) {
+  if (own.draft) return OWN_STATE.draft;
+  if (own.decision === "APPROVED") return OWN_STATE.approved;
+  if (own.decision === "CHANGES_REQUESTED") return OWN_STATE.changes;
+  if (own.checks === "failing") return OWN_STATE.broken;
+  if (own.checks === "running") return OWN_STATE.building;
+  return OWN_STATE.waiting;
+}
+
+const OWN_STATUS_WIDTH =
+  stringWidth("● ") + Math.max(...OWN_STATES.map((state) => stringWidth(state.label)));
+
+function YourPrs({
+  own,
+  repo,
+  selected,
+  error,
+  loading,
+  now,
+  inner,
+}: {
+  own: Own[];
+  repo: { owner: string; name: string };
+  selected: Own | null;
+  error: Error | null;
+  loading: boolean;
+  now: number;
+  inner: number;
+}) {
+  const hidden = own.length - OWN_LIMIT;
+  const rows = own.slice(0, OWN_LIMIT).map((pr) => {
+    const state = ownState(pr);
+    const nobody = state === OWN_STATE.waiting && pr.reviewers.length === 0;
+    return {
+      pr,
+      state,
+      nobody,
+      // Mostly this column says "—", so it is sized to what is in it rather than
+      // to the longest thing that could be, and the title gets the difference.
+      waiting: pr.reviewers.length > 0 ? pr.reviewers.join(" ") : nobody ? "nobody" : "—",
+    };
+  });
+
+  const reviewers = Math.min(REVIEWER_WIDTH, Math.max(0, ...rows.map((r) => stringWidth(r.waiting))));
+  const withReviewers =
+    inner - (4 + 8 + 2 + AGE_WIDTH + 2 + OWN_STATUS_WIDTH) - TITLE_FLOOR >= reviewers + 2;
+
+  const empty = loading ? (
+    <Box>
+      <Spinner color="cyan" />
+      <Text dimColor> looking…</Text>
+    </Box>
+  ) : error ? (
+    <>
+      <Text color="red">✗ {error.message}</Text>
+      {error instanceof SetupError && error.hint[0] ? <Text dimColor>{error.hint[0]}</Text> : null}
+    </>
+  ) : (
+    <Text dimColor>Nothing open that is not already queued</Text>
+  );
+
+  return (
+    <Panel title={own.length > 0 ? `YOUR PRS · ${own.length}` : "YOUR PRS"}>
+      {own.length === 0 ? empty : null}
+      {rows.map(({ pr, state, nobody, waiting }) => {
+        const here = pr === selected;
+        return (
+          <Box key={pr.number}>
+            <Box width={4} flexShrink={0}>
+              <Text color="cyan" bold>
+                {here ? "▸" : " "}
+              </Text>
+            </Box>
+            <PrLink repo={repo} number={pr.number} width={8} bold={here} underline={here} />
+            <Box flexGrow={1} flexShrink={1} minWidth={0} marginRight={2}>
+              <Text wrap="truncate" bold={here} dimColor={pr.draft}>
+                {pr.title}
+              </Text>
+            </Box>
+            {withReviewers ? (
+              <Box width={reviewers} marginRight={2} flexShrink={0}>
+                <Text color={nobody ? "yellow" : undefined} dimColor wrap="truncate">
+                  {waiting}
+                </Text>
+              </Box>
+            ) : null}
+            <Box width={AGE_WIDTH} marginRight={2} flexShrink={0} justifyContent="flex-end">
+              <Text dimColor>{ago(pr.updatedAt, now)}</Text>
+            </Box>
+            <Box width={OWN_STATUS_WIDTH} flexShrink={0}>
+              <Text color={state.color} dimColor={state.dim} wrap="truncate">
+                {state.glyph} {state.label}
+              </Text>
+            </Box>
+          </Box>
+        );
+      })}
+      {hidden > 0 ? (
+        <Box marginLeft={4}>
+          <Text dimColor>…and {hidden} more</Text>
+        </Box>
+      ) : null}
+    </Panel>
+  );
+}
+
 const REVIEW_STATES = {
   broken: { glyph: "✗", label: "ci red", color: "red", dim: false },
   changes: { glyph: "±", label: "changes", color: "yellow", dim: false },
@@ -292,13 +431,6 @@ function reviewState(review: Review) {
 
 const REVIEW_STATUS_WIDTH =
   stringWidth("● ") + Math.max(...Object.values(REVIEW_STATES).map((s) => stringWidth(s.label)));
-
-const AUTHOR_WIDTH = 12;
-const AGE_WIDTH = 4;
-
-// A title truncated to a handful of words says nothing, so the columns beside it
-// are given up in order of how much each earns its space.
-const TITLE_FLOOR = 24;
 
 const DAY = 86_400_000;
 
@@ -768,6 +900,7 @@ export default function App({
     () => fetchReviews({ ...target, login: viewer, self: !target.as }),
     [target, viewer],
   );
+  const loadOwn = useCallback(() => fetchOwn({ ...target, login: viewer }), [target, viewer]);
 
   const { data: outcomeData, error: outcomeError } = usePoll(
     viewer ? loadOutcomes : null,
@@ -777,8 +910,10 @@ export default function App({
   const { data: reviewData, error: reviewError } = usePoll(viewer ? loadReviews : null, 60_000);
   const outcomes = outcomeData ?? NO_OUTCOMES;
   const outcomesLoading = Boolean(viewer) && outcomeData === null && !outcomeError;
+  const { data: ownData, error: ownError } = usePoll(viewer ? loadOwn : null, 60_000);
   const reviews = reviewData ?? NO_REVIEWS;
   const reviewsLoading = Boolean(viewer) && reviewData === null && !reviewError;
+  const ownLoading = Boolean(viewer) && ownData === null && !ownError;
 
   const seen = useRef<Set<string> | null>(null);
 
@@ -844,21 +979,49 @@ export default function App({
   // by number afterwards. Only queue entries carry one, and only your own are in
   // the list — being wrong about somebody else's pull request costs them their
   // afternoon.
+  // Once it is in the queue it belongs to the panel above, which knows where it
+  // sits and when it lands. Listing it twice would only ask which one to believe.
+  const queued = new Set(entries.map((entry) => entry.pullRequest.number));
+  const own = (ownData ?? NO_OWN)
+    .filter((pr) => !queued.has(pr.number))
+    .sort(
+      (a, b) =>
+        OWN_STATES.indexOf(ownState(a)) - OWN_STATES.indexOf(ownState(b)) ||
+        b.updatedAt.getTime() - a.updatedAt.getTime(),
+    );
+
   const toReview = reviews.slice(0, REVIEW_LIMIT);
   const selectable: {
     number: number;
     entry: Entry | null;
+    own: Own | null;
     review: Review | null;
     outcome: Outcome | null;
   }[] = [
     ...mine.map((entry) => ({
       number: entry.pullRequest.number,
       entry,
+      own: null,
       review: null,
       outcome: null,
     })),
-    ...toReview.map((review) => ({ number: review.number, entry: null, review, outcome: null })),
-    ...recent.map((outcome) => ({ number: outcome.number, entry: null, review: null, outcome })),
+    ...own
+      .slice(0, OWN_LIMIT)
+      .map((pr) => ({ number: pr.number, entry: null, own: pr, review: null, outcome: null })),
+    ...toReview.map((review) => ({
+      number: review.number,
+      entry: null,
+      own: null,
+      review,
+      outcome: null,
+    })),
+    ...recent.map((outcome) => ({
+      number: outcome.number,
+      entry: null,
+      own: null,
+      review: null,
+      outcome,
+    })),
   ];
   const selected =
     selectable.length === 0
@@ -868,6 +1031,7 @@ export default function App({
   const selectedEntry = actionable?.pullRequest.number ?? null;
   const selectedOutcome = selected?.outcome ?? null;
   const selectedReview = selected?.review ?? null;
+  const selectedOwn = selected?.own ?? null;
 
   // Dismissing the dialog aborts the attempt, so a jump that is waiting to rejoin
   // the queue does not land after somebody has cancelled it.
@@ -1065,6 +1229,16 @@ export default function App({
           <Empty outcomes={outcomes} now={now} />
         ) : null}
       </Panel>
+
+      <YourPrs
+        own={own}
+        repo={target}
+        selected={selectedOwn}
+        error={ownError}
+        loading={ownLoading}
+        now={now}
+        inner={width - PANEL_CHROME}
+      />
 
       <ToReview
         reviews={reviews}
