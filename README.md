@@ -5,9 +5,9 @@ it, what is holding them up, and when they will land.
 
 What other people are waiting on you for sits at the top. Below it your own
 work falls down the screen as it progresses — waiting for review, then the
-queue, then gone — and an arrow joins each stage to the next.
+queue, then gone — and a pipe joins each stage to the next.
 
-That arrow lights up when something of yours is about to move down it: green
+That pipe lights up when something of yours is about to move down it: green
 for an approved pull request waiting to be queued, cyan when one of yours is
 next to land.
 

@@ -926,10 +926,14 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 // makes them read as one pipeline costs no height. It earns the space by
 // lighting up when something of yours is about to move down it.
 function Flow({ label, color = "cyan" }: { label?: string; color?: string }) {
+  const lit = Boolean(label);
   return (
-    <Box marginLeft={3}>
-      <Text color={label ? color : undefined} bold={Boolean(label)} dimColor={!label}>
-        ↓{label ? `  ${label}` : ""}
+    <Box flexDirection="column" marginLeft={3}>
+      <Text color={lit ? color : undefined} dimColor={!lit}>
+        │
+      </Text>
+      <Text color={lit ? color : undefined} bold={lit} dimColor={!lit}>
+        ▼{label ? `  ${label}` : ""}
       </Text>
     </Box>
   );
