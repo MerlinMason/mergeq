@@ -100,7 +100,7 @@ const NOTHING_TO_REVIEW = [
 const NOTHING_QUEUED = [
   "Nothing of yours in the queue — yassify something 💅",
   "Nothing of yours in the queue — make something magic ✨",
-  "Nothing of yours in the queue — crank up the slay 👑",
+  "Nothing of yours in the queue — slay 👑",
   "Nothing of yours in the queue — get ticket-maxxing 🚢",
 ];
 
