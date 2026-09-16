@@ -88,6 +88,15 @@ function busyness(depth: number): { emoji: string; label: string; color: string 
   return { emoji: "🔥", label: "absolute carnage", color: "red" };
 }
 
+const NOTHING_TO_REVIEW = [
+  "Nobody is waiting on you — inbox zero, king 👑",
+  "No reviews in the pile — dangerously caught up 🫡",
+  "Review queue empty — go and touch some grass 🌱",
+  "Nobody needs you right now. Devastating 💅",
+  "Zero reviews waiting — suspiciously unemployed behaviour 😌",
+  "Not a single review to your name — unbothered, moisturised 🧴",
+];
+
 const NOTHING_QUEUED = [
   "Nothing of yours in the queue — yassify something 💅",
   "Nothing of yours in the queue — make something magic ✨",
@@ -465,6 +474,9 @@ function ToReview({
 }) {
   const shown = reviews.slice(0, REVIEW_LIMIT);
   const hidden = reviews.length - shown.length;
+  const [praise] = useState(
+    () => NOTHING_TO_REVIEW[Math.floor(Math.random() * NOTHING_TO_REVIEW.length)]!,
+  );
 
   let spare = inner - (4 + 8 + 2 + AGE_WIDTH + 2 + REVIEW_STATUS_WIDTH) - TITLE_FLOOR;
   const withAuthor = spare >= AUTHOR_WIDTH + 2;
@@ -482,7 +494,7 @@ function ToReview({
       {error instanceof SetupError && error.hint[0] ? <Text dimColor>{error.hint[0]}</Text> : null}
     </>
   ) : (
-    <Text dimColor>Nobody is waiting on you — inbox zero, king 🧘</Text>
+    <Text dimColor>{praise}</Text>
   );
 
   return (
@@ -1163,6 +1175,8 @@ export default function App({
           {" "}
           → {target.branch}
         </Text>
+        <Spacer />
+        {fetching ? <Spinner color="cyan" /> : <Text> </Text>}
       </Box>
 
       <Box marginBottom={1}>
@@ -1229,13 +1243,12 @@ export default function App({
             <Text color="gray">connecting…</Text>
           )}
           <Spacer />
-          {error ? <Text color="red">retrying… </Text> : null}
+          {error ? <Text color="red">retrying…</Text> : null}
           {!error && stale ? (
             <Text color="yellow" dimColor>
-              last update {ago(updatedAt!, now)} ago{" "}
+              last update {ago(updatedAt!, now)} ago
             </Text>
           ) : null}
-          {fetching ? <Spinner color="cyan" /> : <Text> </Text>}
         </Box>
 
         <Box marginY={1}>
