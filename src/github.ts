@@ -83,7 +83,7 @@ export type Rate = {
   gapMinutes: number;
 };
 
-export type ReviewChecks = "passing" | "failing" | "running" | null;
+type ReviewChecks = "passing" | "failing" | "running" | null;
 
 export type Review = {
   number: number;
@@ -107,6 +107,38 @@ export type Own = {
 };
 
 const OUTCOME_FETCH_LIMIT = 12;
+
+// A type:ISSUE search can return something that is not a pull request, and the
+// inline fragment then yields an empty object rather than nothing at all — so
+// every caller has to drop the nodes that came back without a number.
+async function search<T extends { number: number }>(opts: {
+  token: string;
+  first: number;
+  fields: string;
+  terms: (string | false)[];
+}): Promise<T[]> {
+  const data = await graphql<{ search: { nodes: (T | null)[] } }>(
+    opts.token,
+    `query($q:String!){ search(query:$q, type:ISSUE, first:${opts.first}){ nodes{ ... on PullRequest {
+      ${opts.fields}
+    }}}}`,
+    { q: opts.terms.filter(Boolean).join(" ") },
+  );
+
+  return data.search.nodes.filter((node): node is T => Boolean(node?.number));
+}
+
+const ROLLUP = "commits(last:1){ nodes{ commit{ statusCheckRollup{ state } } } }";
+
+type RollupNode = { commits: { nodes: { commit: { statusCheckRollup: { state: string } | null } }[] } };
+
+function rollup(node: RollupNode): ReviewChecks {
+  const state = node.commits.nodes[0]?.commit.statusCheckRollup?.state;
+  if (!state) return null;
+  if (state === "FAILURE" || state === "ERROR") return "failing";
+  if (state === "SUCCESS") return "passing";
+  return "running";
+}
 
 export function outcomeKey(outcome: Outcome): string {
   return `${outcome.number}-${outcome.at.getTime()}`;
@@ -234,26 +266,21 @@ export async function fetchOutcomes(opts: {
     removed: { nodes: { createdAt: string; reason: string | null }[] };
   };
 
-  const data = await graphql<{ search: { nodes: Node[] } }>(
-    opts.token,
-    `query($q:String!){ search(query:$q, type:ISSUE, first:50){ nodes{ ... on PullRequest {
-      number title author{ login }
-      removed: timelineItems(last:3, itemTypes:[REMOVED_FROM_MERGE_QUEUE_EVENT]){ nodes{ ... on RemovedFromMergeQueueEvent { createdAt reason } } }
-    }}}}`,
-    {
-      q: [
-        `repo:${opts.owner}/${opts.name}`,
-        opts.login ? `author:${opts.login}` : "",
-        "is:pr sort:updated-desc",
-      ]
-        .filter(Boolean)
-        .join(" "),
-    },
-  );
+  const nodes = await search<Node>({
+    token: opts.token,
+    first: 50,
+    fields: `number title author{ login }
+      removed: timelineItems(last:3, itemTypes:[REMOVED_FROM_MERGE_QUEUE_EVENT]){ nodes{ ... on RemovedFromMergeQueueEvent { createdAt reason } } }`,
+    terms: [
+      `repo:${opts.owner}/${opts.name}`,
+      Boolean(opts.login) && `author:${opts.login}`,
+      "is:pr sort:updated-desc",
+    ],
+  });
 
   const outcomes: Outcome[] = [];
 
-  for (const node of data.search.nodes) {
+  for (const node of nodes) {
     for (const removal of node.removed.nodes) {
       outcomes.push({
         number: node.number,
@@ -277,53 +304,42 @@ export async function fetchOwn(opts: {
   name: string;
   login: string;
 }): Promise<Own[]> {
-  type Node = {
+  type Node = RollupNode & {
     number: number;
     title: string;
     isDraft: boolean;
     updatedAt: string;
     reviewDecision: Review["decision"];
-    commits: { nodes: { commit: { statusCheckRollup: { state: string } | null } }[] };
     reviewRequests: {
       nodes: { requestedReviewer: { login?: string; slug?: string } | null }[];
     };
   };
 
-  const data = await graphql<{ search: { nodes: Node[] } }>(
-    opts.token,
-    `query($q:String!){ search(query:$q, type:ISSUE, first:${OWN_FETCH_LIMIT}){ nodes{ ... on PullRequest {
-      number title isDraft updatedAt reviewDecision
-      commits(last:1){ nodes{ commit{ statusCheckRollup{ state } } } }
+  const nodes = await search<Node>({
+    token: opts.token,
+    first: OWN_FETCH_LIMIT,
+    fields: `number title isDraft updatedAt reviewDecision
+      ${ROLLUP}
       reviewRequests(first:5){ nodes{ requestedReviewer{
         ... on User { login } ... on Team { slug }
-      }}}
-    }}}}`,
-    { q: `repo:${opts.owner}/${opts.name} is:pr is:open author:${opts.login} sort:updated-desc` },
-  );
+      }}}`,
+    terms: [`repo:${opts.owner}/${opts.name}`, "is:pr is:open", `author:${opts.login}`, "sort:updated-desc"],
+  });
 
-  return data.search.nodes
-    .filter((node) => node?.number)
-    .map((node) => ({
-      number: node.number,
-      title: node.title,
-      draft: node.isDraft,
-      updatedAt: new Date(node.updatedAt),
-      decision: node.reviewDecision,
-      checks: rollup(node.commits.nodes[0]?.commit.statusCheckRollup?.state),
-      reviewers: node.reviewRequests.nodes
-        .map((request) => request.requestedReviewer?.login ?? request.requestedReviewer?.slug)
-        .filter((who): who is string => Boolean(who)),
-    }));
+  return nodes.map((node) => ({
+    number: node.number,
+    title: node.title,
+    draft: node.isDraft,
+    updatedAt: new Date(node.updatedAt),
+    decision: node.reviewDecision,
+    checks: rollup(node),
+    reviewers: node.reviewRequests.nodes
+      .map((request) => request.requestedReviewer?.login ?? request.requestedReviewer?.slug)
+      .filter((who): who is string => Boolean(who)),
+  }));
 }
 
 const REVIEW_FETCH_LIMIT = 25;
-
-function rollup(state: string | null | undefined): ReviewChecks {
-  if (!state) return null;
-  if (state === "FAILURE" || state === "ERROR") return "failing";
-  if (state === "SUCCESS") return "passing";
-  return "running";
-}
 
 export async function fetchReviews(opts: {
   token: string;
@@ -337,7 +353,7 @@ export async function fetchReviews(opts: {
     requestedReviewer: { __typename: string; login?: string } | null;
   };
 
-  type Node = {
+  type Node = RollupNode & {
     number: number;
     title: string;
     createdAt: string;
@@ -345,36 +361,31 @@ export async function fetchReviews(opts: {
     deletions: number;
     author: { login: string } | null;
     reviewDecision: Review["decision"];
-    commits: { nodes: { commit: { statusCheckRollup: { state: string } | null } }[] };
     requests: { nodes: Requested[] };
   };
 
-  const data = await graphql<{ search: { nodes: Node[] } }>(
-    opts.token,
-    `query($q:String!){ search(query:$q, type:ISSUE, first:${REVIEW_FETCH_LIMIT}){ nodes{ ... on PullRequest {
-      number title createdAt additions deletions
+  const nodes = await search<Node>({
+    token: opts.token,
+    first: REVIEW_FETCH_LIMIT,
+    fields: `number title createdAt additions deletions
       author{ login }
       reviewDecision
-      commits(last:1){ nodes{ commit{ statusCheckRollup{ state } } } }
+      ${ROLLUP}
       requests: timelineItems(last:20, itemTypes:[REVIEW_REQUESTED_EVENT]){ nodes{ ... on ReviewRequestedEvent {
         createdAt requestedReviewer{ __typename ... on User { login } }
-      }}}
-    }}}}`,
-    {
-      q: [
-        `repo:${opts.owner}/${opts.name}`,
-        "is:pr is:open draft:false",
-        // user-review-requested counts a request made to a team you are in;
-        // review-requested does not, but is the only one that takes a name
-        // other than your own.
-        opts.self ? "user-review-requested:@me" : `review-requested:${opts.login}`,
-        "sort:updated-desc",
-      ].join(" "),
-    },
-  );
+      }}}`,
+    terms: [
+      `repo:${opts.owner}/${opts.name}`,
+      "is:pr is:open draft:false",
+      // user-review-requested counts a request made to a team you are in;
+      // review-requested does not, but is the only one that takes a name
+      // other than your own.
+      opts.self ? "user-review-requested:@me" : `review-requested:${opts.login}`,
+      "sort:updated-desc",
+    ],
+  });
 
-  return data.search.nodes
-    .filter((node) => node?.number)
+  return nodes
     .map((node) => {
       const events = node.requests.nodes.filter((event) => event?.createdAt);
       // Requests to a team carry the team, not you, so when nothing names you
@@ -390,7 +401,7 @@ export async function fetchReviews(opts: {
         deletions: node.deletions,
         requestedAt: new Date(asked?.createdAt ?? node.createdAt),
         decision: node.reviewDecision,
-        checks: rollup(node.commits.nodes[0]?.commit.statusCheckRollup?.state),
+        checks: rollup(node),
       };
     })
     .sort((a, b) => a.requestedAt.getTime() - b.requestedAt.getTime());

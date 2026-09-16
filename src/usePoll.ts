@@ -36,5 +36,7 @@ export function usePoll<T>(load: (() => Promise<T>) | null, intervalMs: number) 
     };
   }, [load, intervalMs]);
 
-  return { data, error };
+  // The hook is what set `data` to null and what knows whether there is a query
+  // at all, so it reports waiting rather than making each caller rebuild it.
+  return { data, error, loading: Boolean(load) && data === null && error === null };
 }

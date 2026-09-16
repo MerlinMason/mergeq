@@ -40,7 +40,6 @@ const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", 
 
 const NO_OUTCOMES: Outcome[] = [];
 const NO_REVIEWS: Review[] = [];
-const NO_OWN: Own[] = [];
 
 const RECENT_LIMIT = 6;
 const REVIEW_LIMIT = 6;
@@ -166,6 +165,112 @@ function PrLink({
       </Text>
     </Box>
   );
+}
+
+// The three list panels all lead with these, so the arithmetic that decides how
+// much title fits reads the same numbers the markup draws.
+const CURSOR_WIDTH = 4;
+const NUMBER_WIDTH = 8;
+const GAP = 2;
+
+function RowHead({
+  repo,
+  number,
+  title,
+  here,
+  dim,
+}: {
+  repo: { owner: string; name: string };
+  number: number;
+  title: string;
+  here: boolean;
+  dim?: boolean;
+}) {
+  return (
+    <>
+      <Box width={CURSOR_WIDTH} flexShrink={0}>
+        <Text color="cyan" bold>
+          {here ? "▸" : " "}
+        </Text>
+      </Box>
+      <PrLink repo={repo} number={number} width={NUMBER_WIDTH} bold={here} underline={here} />
+      <Box flexGrow={1} flexShrink={1} minWidth={0} marginRight={GAP}>
+        <Text wrap="truncate" bold={here} dimColor={dim}>
+          {title}
+        </Text>
+      </Box>
+    </>
+  );
+}
+
+// Three panels say the same three things while they have no rows to show.
+function Fallback({
+  loading,
+  error,
+  children,
+}: {
+  loading: boolean;
+  error: Error | null;
+  children: React.ReactNode;
+}) {
+  if (loading) {
+    return (
+      <Box>
+        <Spinner color="cyan" />
+        <Text dimColor> looking…</Text>
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <>
+        <Text color="red">✗ {error.message}</Text>
+        {error instanceof SetupError && error.hint[0] ? <Text dimColor>{error.hint[0]}</Text> : null}
+      </>
+    );
+  }
+
+  return <Text dimColor>{children}</Text>;
+}
+
+// Measured in terminal columns, not code units, so a two-column glyph does not
+// shift the column it sits in.
+function statusWidth(states: { label: string }[]): number {
+  return stringWidth("✓ ") + Math.max(...states.map((state) => stringWidth(state.label)));
+}
+
+function Status({
+  state,
+  width,
+}: {
+  state: { glyph: string; label: string; color: string; dim: boolean };
+  width: number;
+}) {
+  return (
+    <Box width={width} flexShrink={0}>
+      <Text color={state.color} dimColor={state.dim} wrap="truncate">
+        {state.glyph} {state.label}
+      </Text>
+    </Box>
+  );
+}
+
+function More({ hidden }: { hidden: number }) {
+  if (hidden <= 0) return null;
+  return (
+    <Box marginLeft={CURSOR_WIDTH}>
+      <Text dimColor>…and {hidden} more</Text>
+    </Box>
+  );
+}
+
+// A queue entry keeps its number one level down; everything else in a list
+// carries it directly.
+type Selectable = Entry | Own | Review | Outcome;
+
+function numberOf(item: Selectable): number {
+  return "pullRequest" in item ? item.pullRequest.number : item.number;
 }
 
 const AHEAD_GUTTER = 4;
@@ -294,39 +399,38 @@ const AGE_WIDTH = 4;
 // are given up in order of how much each earns its space.
 const TITLE_FLOOR = 24;
 
+// Everything a list row spends before its optional columns: the cursor, the
+// number, the title's margin, and the age column with its own.
+const ROW_FIXED = CURSOR_WIDTH + NUMBER_WIDTH + GAP + AGE_WIDTH + GAP;
+
 // Ordered by what it is asking you to do, which is also the order the panel
 // sorts in: ship it, answer them, fix it, then the ones where waiting is the
 // only move.
-const OWN_STATES = [
-  { key: "approved", glyph: "✓", label: "approved", color: "green", dim: false },
-  { key: "changes", glyph: "±", label: "changes", color: "yellow", dim: false },
-  { key: "broken", glyph: "✗", label: "ci red", color: "red", dim: false },
-  { key: "waiting", glyph: "○", label: "waiting", color: "cyan", dim: false },
-  { key: "building", glyph: "◐", label: "building", color: "yellow", dim: true },
-  { key: "draft", glyph: "✎", label: "draft", color: "gray", dim: true },
-] as const;
-
-const OWN_STATE = Object.fromEntries(OWN_STATES.map((state) => [state.key, state])) as Record<
-  (typeof OWN_STATES)[number]["key"],
-  (typeof OWN_STATES)[number]
->;
+const OWN_STATES = {
+  approved: { rank: 0, glyph: "✓", label: "approved", color: "green", dim: false },
+  changes: { rank: 1, glyph: "±", label: "changes", color: "yellow", dim: false },
+  broken: { rank: 2, glyph: "✗", label: "ci red", color: "red", dim: false },
+  waiting: { rank: 3, glyph: "○", label: "waiting", color: "cyan", dim: false },
+  building: { rank: 4, glyph: "◐", label: "building", color: "yellow", dim: true },
+  draft: { rank: 5, glyph: "✎", label: "draft", color: "gray", dim: true },
+};
 
 // A draft says draft even when its build is red: you already know, and nobody
 // is going to look at it either way.
 function ownState(own: Own) {
-  if (own.draft) return OWN_STATE.draft;
-  if (own.decision === "APPROVED") return OWN_STATE.approved;
-  if (own.decision === "CHANGES_REQUESTED") return OWN_STATE.changes;
-  if (own.checks === "failing") return OWN_STATE.broken;
-  if (own.checks === "running") return OWN_STATE.building;
-  return OWN_STATE.waiting;
+  if (own.draft) return OWN_STATES.draft;
+  if (own.decision === "APPROVED") return OWN_STATES.approved;
+  if (own.decision === "CHANGES_REQUESTED") return OWN_STATES.changes;
+  if (own.checks === "failing") return OWN_STATES.broken;
+  if (own.checks === "running") return OWN_STATES.building;
+  return OWN_STATES.waiting;
 }
 
-const OWN_STATUS_WIDTH =
-  stringWidth("● ") + Math.max(...OWN_STATES.map((state) => stringWidth(state.label)));
+const OWN_STATUS_WIDTH = statusWidth(Object.values(OWN_STATES));
 
 function YourPrs({
-  own,
+  shown,
+  total,
   repo,
   selected,
   error,
@@ -334,7 +438,8 @@ function YourPrs({
   now,
   inner,
 }: {
-  own: Own[];
+  shown: Own[];
+  total: number;
   repo: { owner: string; name: string };
   selected: Own | null;
   error: Error | null;
@@ -342,10 +447,10 @@ function YourPrs({
   now: number;
   inner: number;
 }) {
-  const hidden = own.length - OWN_LIMIT;
-  const rows = own.slice(0, OWN_LIMIT).map((pr) => {
+  const hidden = total - shown.length;
+  const rows = shown.map((pr) => {
     const state = ownState(pr);
-    const nobody = state === OWN_STATE.waiting && pr.reviewers.length === 0;
+    const nobody = state === OWN_STATES.waiting && pr.reviewers.length === 0;
     return {
       pr,
       state,
@@ -357,64 +462,39 @@ function YourPrs({
   });
 
   const reviewers = Math.min(REVIEWER_WIDTH, Math.max(0, ...rows.map((r) => stringWidth(r.waiting))));
-  const withReviewers =
-    inner - (4 + 8 + 2 + AGE_WIDTH + 2 + OWN_STATUS_WIDTH) - TITLE_FLOOR >= reviewers + 2;
-
-  const empty = loading ? (
-    <Box>
-      <Spinner color="cyan" />
-      <Text dimColor> looking…</Text>
-    </Box>
-  ) : error ? (
-    <>
-      <Text color="red">✗ {error.message}</Text>
-      {error instanceof SetupError && error.hint[0] ? <Text dimColor>{error.hint[0]}</Text> : null}
-    </>
-  ) : (
-    <Text dimColor>Nothing open that is not already queued</Text>
-  );
+  const spare = inner - ROW_FIXED - OWN_STATUS_WIDTH - TITLE_FLOOR;
+  const withReviewers = spare >= reviewers + GAP;
 
   return (
-    <Panel title={own.length > 0 ? `YOUR PRS · ${own.length}` : "YOUR PRS"}>
-      {own.length === 0 ? empty : null}
-      {rows.map(({ pr, state, nobody, waiting }) => {
-        const here = pr === selected;
-        return (
-          <Box key={pr.number}>
-            <Box width={4} flexShrink={0}>
-              <Text color="cyan" bold>
-                {here ? "▸" : " "}
-              </Text>
-            </Box>
-            <PrLink repo={repo} number={pr.number} width={8} bold={here} underline={here} />
-            <Box flexGrow={1} flexShrink={1} minWidth={0} marginRight={2}>
-              <Text wrap="truncate" bold={here} dimColor={pr.draft}>
-                {pr.title}
-              </Text>
-            </Box>
-            {withReviewers ? (
-              <Box width={reviewers} marginRight={2} flexShrink={0}>
-                <Text color={nobody ? "yellow" : undefined} dimColor wrap="truncate">
-                  {waiting}
-                </Text>
-              </Box>
-            ) : null}
-            <Box width={AGE_WIDTH} marginRight={2} flexShrink={0} justifyContent="flex-end">
-              <Text dimColor>{ago(pr.updatedAt, now)}</Text>
-            </Box>
-            <Box width={OWN_STATUS_WIDTH} flexShrink={0}>
-              <Text color={state.color} dimColor={state.dim} wrap="truncate">
-                {state.glyph} {state.label}
-              </Text>
-            </Box>
-          </Box>
-        );
-      })}
-      {hidden > 0 ? (
-        <Box marginLeft={4}>
-          <Text dimColor>…and {hidden} more</Text>
-        </Box>
+    <Panel title={total > 0 ? `YOUR PRS · ${total}` : "YOUR PRS"}>
+      {rows.length === 0 ? (
+        <Fallback loading={loading} error={error}>
+          Nothing open that is not already queued
+        </Fallback>
       ) : null}
+      {rows.map(({ pr, state, nobody, waiting }) => (
+        <Box key={pr.number}>
+          <RowHead
+            repo={repo}
+            number={pr.number}
+            title={pr.title}
+            here={pr === selected}
+            dim={pr.draft}
+          />
+          {withReviewers ? (
+            <Box width={reviewers} marginRight={GAP} flexShrink={0}>
+              <Text color={nobody ? "yellow" : undefined} dimColor wrap="truncate">
+                {waiting}
+              </Text>
+            </Box>
+          ) : null}
+          <Box width={AGE_WIDTH} marginRight={GAP} flexShrink={0} justifyContent="flex-end">
+            <Text dimColor>{ago(pr.updatedAt, now)}</Text>
+          </Box>
+          <Status state={state} width={OWN_STATUS_WIDTH} />
+        </Box>
+      ))}
+      <More hidden={hidden} />
     </Panel>
   );
 }
@@ -438,8 +518,7 @@ function reviewState(review: Review) {
   return REVIEW_STATES.ready;
 }
 
-const REVIEW_STATUS_WIDTH =
-  stringWidth("● ") + Math.max(...Object.values(REVIEW_STATES).map((s) => stringWidth(s.label)));
+const REVIEW_STATUS_WIDTH = statusWidth(Object.values(REVIEW_STATES));
 
 const DAY = 86_400_000;
 
@@ -456,7 +535,8 @@ function lines(count: number): string {
 const SIZE_WIDTH = stringWidth("+99.9k -99.9k");
 
 function ToReview({
-  reviews,
+  shown,
+  total,
   repo,
   selected,
   error,
@@ -464,7 +544,8 @@ function ToReview({
   now,
   inner,
 }: {
-  reviews: Review[];
+  shown: Review[];
+  total: number;
   repo: { owner: string; name: string };
   selected: Review | null;
   error: Error | null;
@@ -472,84 +553,59 @@ function ToReview({
   now: number;
   inner: number;
 }) {
-  const shown = reviews.slice(0, REVIEW_LIMIT);
-  const hidden = reviews.length - shown.length;
+  const hidden = total - shown.length;
   const [praise] = useState(
     () => NOTHING_TO_REVIEW[Math.floor(Math.random() * NOTHING_TO_REVIEW.length)]!,
   );
 
-  let spare = inner - (4 + 8 + 2 + AGE_WIDTH + 2 + REVIEW_STATUS_WIDTH) - TITLE_FLOOR;
-  const withAuthor = spare >= AUTHOR_WIDTH + 2;
-  if (withAuthor) spare -= AUTHOR_WIDTH + 2;
-  const withSize = spare >= SIZE_WIDTH + 2;
-
-  const empty = loading ? (
-    <Box>
-      <Spinner color="cyan" />
-      <Text dimColor> looking…</Text>
-    </Box>
-  ) : error ? (
-    <>
-      <Text color="red">✗ {error.message}</Text>
-      {error instanceof SetupError && error.hint[0] ? <Text dimColor>{error.hint[0]}</Text> : null}
-    </>
-  ) : (
-    <Text dimColor>{praise}</Text>
-  );
+  let spare = inner - ROW_FIXED - REVIEW_STATUS_WIDTH - TITLE_FLOOR;
+  const withAuthor = spare >= AUTHOR_WIDTH + GAP;
+  if (withAuthor) spare -= AUTHOR_WIDTH + GAP;
+  const withSize = spare >= SIZE_WIDTH + GAP;
 
   return (
-    <Panel title={reviews.length > 0 ? `TO REVIEW · ${reviews.length}` : "TO REVIEW"}>
-      {shown.length === 0 ? empty : null}
+    <Panel title={total > 0 ? `TO REVIEW · ${total}` : "TO REVIEW"}>
+      {shown.length === 0 ? (
+        <Fallback loading={loading} error={error}>
+          {praise}
+        </Fallback>
+      ) : null}
       {shown.map((review) => {
         const state = reviewState(review);
-        const here = review === selected;
         const waited = now - review.requestedAt.getTime();
         return (
           <Box key={review.number}>
-            <Box width={4} flexShrink={0}>
-              <Text color="cyan" bold>
-                {here ? "▸" : " "}
-              </Text>
-            </Box>
-            <PrLink repo={repo} number={review.number} width={8} bold={here} underline={here} />
-            <Box flexGrow={1} flexShrink={1} minWidth={0} marginRight={2}>
-              <Text wrap="truncate" bold={here}>
-                {review.title}
-              </Text>
-            </Box>
+            <RowHead
+              repo={repo}
+              number={review.number}
+              title={review.title}
+              here={review === selected}
+            />
             {withAuthor ? (
-              <Box width={AUTHOR_WIDTH} marginRight={2} flexShrink={0}>
+              <Box width={AUTHOR_WIDTH} marginRight={GAP} flexShrink={0}>
                 <Text dimColor wrap="truncate">
                   {review.author}
                 </Text>
               </Box>
             ) : null}
             {withSize ? (
-              <Box width={SIZE_WIDTH} marginRight={2} flexShrink={0} justifyContent="flex-end">
+              <Box width={SIZE_WIDTH} marginRight={GAP} flexShrink={0} justifyContent="flex-end">
                 <Text>
                   <Text color="green">+{lines(review.additions)}</Text>
                   <Text color="red"> -{lines(review.deletions)}</Text>
                 </Text>
               </Box>
             ) : null}
-            <Box width={AGE_WIDTH} marginRight={2} flexShrink={0} justifyContent="flex-end">
+            <Box width={AGE_WIDTH} marginRight={GAP} flexShrink={0} justifyContent="flex-end">
               <Text color={waitColor(waited)} bold={waited > 3 * DAY}>
                 {ago(review.requestedAt, now)}
               </Text>
             </Box>
-            <Box width={REVIEW_STATUS_WIDTH} flexShrink={0}>
-              <Text color={state.color} dimColor={state.dim} wrap="truncate">
-                {state.glyph} {state.label}
-              </Text>
-            </Box>
+            <Status state={state} width={REVIEW_STATUS_WIDTH} />
           </Box>
         );
       })}
-      {hidden > 0 ? (
-        <Box marginLeft={4}>
-          <Text dimColor>…and {hidden} more</Text>
-        </Box>
-      ) : null}
+      <More hidden={hidden} />
     </Panel>
   );
 }
@@ -571,55 +627,30 @@ function Recently({
   loading: boolean;
   now: number;
 }) {
-  const empty =
-    loading ? (
-      <Box>
-        <Spinner color="cyan" />
-        <Text dimColor> looking…</Text>
-      </Box>
-    ) : error ? (
-      <>
-        <Text color="red">✗ {error.message}</Text>
-        {error instanceof SetupError && error.hint[0] ? (
-          <Text dimColor>{error.hint[0]}</Text>
-        ) : null}
-      </>
-    ) : (
-      <Text dimColor>
-        {showAuthor
-          ? "Nothing has left the queue lately"
-          : "Nothing of yours has left the queue lately"}
-      </Text>
-    );
-
   return (
     <Panel title={showAuthor ? "ALL RECENT" : "YOUR RECENT"}>
-      {outcomes.length === 0 ? empty : null}
+      {outcomes.length === 0 ? (
+        <Fallback loading={loading} error={error}>
+          {showAuthor
+            ? "Nothing has left the queue lately"
+            : "Nothing of yours has left the queue lately"}
+        </Fallback>
+      ) : null}
       {outcomes.map((outcome) => {
         const merged = outcome.kind === "merged";
         const reason = reasonOf(outcome.reason);
         const here = outcome === selected;
         return (
           <Box key={outcomeKey(outcome)}>
-            <Box width={4} flexShrink={0}>
-              <Text color="cyan" bold>
-                {here ? "▸" : " "}
-              </Text>
-            </Box>
-            <PrLink
+            <RowHead
               repo={repo}
               number={outcome.number}
-              width={8}
-              bold={here}
-              underline={here}
+              title={outcome.title}
+              here={here}
+              dim={!here}
             />
-            <Box flexGrow={1} flexShrink={1} minWidth={0} marginRight={2}>
-              <Text wrap="truncate" bold={here} dimColor={!here}>
-                {outcome.title}
-              </Text>
-            </Box>
             {showAuthor ? (
-              <Box width={14} marginRight={2} flexShrink={0}>
+              <Box width={REVIEWER_WIDTH} marginRight={GAP} flexShrink={0}>
                 <Text dimColor wrap="truncate">
                   {outcome.author}
                 </Text>
@@ -885,13 +916,10 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 // The gap between two panels was already a blank row, so the connector that
 // makes them read as one pipeline costs no height. It earns the space by
 // lighting up when something of yours is about to move down it.
-function Flow({ label, color }: { label?: string; color?: string }) {
+function Flow({ label, color = "cyan" }: { label?: string; color?: string }) {
   return (
-    <Box>
-      <Box width={3} flexShrink={0}>
-        <Text> </Text>
-      </Box>
-      <Text color={color} bold={Boolean(color)} dimColor={!color}>
+    <Box marginLeft={3}>
+      <Text color={label ? color : undefined} bold={Boolean(label)} dimColor={!label}>
         ↓{label ? `  ${label}` : ""}
       </Text>
     </Box>
@@ -929,18 +957,24 @@ export default function App({
   );
   const loadOwn = useCallback(() => fetchOwn({ ...target, login: viewer }), [target, viewer]);
 
-  const { data: outcomeData, error: outcomeError } = usePoll(
-    viewer ? loadOutcomes : null,
-    60_000,
-  );
+  const {
+    data: outcomeData,
+    error: outcomeError,
+    loading: outcomesLoading,
+  } = usePoll(viewer ? loadOutcomes : null, 60_000);
   const { data: rate } = usePoll(loadRate, 300_000);
-  const { data: reviewData, error: reviewError } = usePoll(viewer ? loadReviews : null, 60_000);
+  const {
+    data: reviewData,
+    error: reviewError,
+    loading: reviewsLoading,
+  } = usePoll(viewer ? loadReviews : null, 60_000);
+  const {
+    data: ownData,
+    error: ownError,
+    loading: ownLoading,
+  } = usePoll(viewer ? loadOwn : null, 60_000);
   const outcomes = outcomeData ?? NO_OUTCOMES;
-  const outcomesLoading = Boolean(viewer) && outcomeData === null && !outcomeError;
-  const { data: ownData, error: ownError } = usePoll(viewer ? loadOwn : null, 60_000);
   const reviews = reviewData ?? NO_REVIEWS;
-  const reviewsLoading = Boolean(viewer) && reviewData === null && !reviewError;
-  const ownLoading = Boolean(viewer) && ownData === null && !ownError;
 
   const seen = useRef<Set<string> | null>(null);
 
@@ -1001,69 +1035,37 @@ export default function App({
   const buildWindow = queue?.maximumEntriesToBuild ?? 0;
   const busy = busyness(depth);
 
-  const recent = outcomes.slice(0, RECENT_LIMIT);
-  // Each row carries whatever it came from, so nothing has to be looked up again
-  // by number afterwards. Only queue entries carry one, and only your own are in
-  // the list — being wrong about somebody else's pull request costs them their
-  // afternoon.
-  // Once it is in the queue it belongs to the panel above, which knows where it
+  // Once it is in the queue it belongs to the queue panel, which knows where it
   // sits and when it lands. Listing it twice would only ask which one to believe.
   const queued = new Set(entries.map((entry) => entry.pullRequest.number));
-  const own = (ownData ?? NO_OWN)
+  const own = (ownData ?? [])
     .filter((pr) => !queued.has(pr.number))
     .sort(
       (a, b) =>
-        OWN_STATES.indexOf(ownState(a)) - OWN_STATES.indexOf(ownState(b)) ||
-        b.updatedAt.getTime() - a.updatedAt.getTime(),
+        ownState(a).rank - ownState(b).rank || b.updatedAt.getTime() - a.updatedAt.getTime(),
     );
 
   // What is poised to fall through each join, which is what lights the arrow
   // between the two panels it joins.
-  const ready = own.filter((pr) => ownState(pr) === OWN_STATE.approved).length;
+  const ready = own.filter((pr) => ownState(pr) === OWN_STATES.approved).length;
   const landing = mine.some((entry) => entry.position === 1);
 
+  // Sliced once, here, so a panel cannot disagree with the list the cursor walks.
+  const recent = outcomes.slice(0, RECENT_LIMIT);
   const toReview = reviews.slice(0, REVIEW_LIMIT);
-  const selectable: {
-    number: number;
-    entry: Entry | null;
-    own: Own | null;
-    review: Review | null;
-    outcome: Outcome | null;
-  }[] = [
-    ...toReview.map((review) => ({
-      number: review.number,
-      entry: null,
-      own: null,
-      review,
-      outcome: null,
-    })),
-    ...own
-      .slice(0, OWN_LIMIT)
-      .map((pr) => ({ number: pr.number, entry: null, own: pr, review: null, outcome: null })),
-    ...mine.map((entry) => ({
-      number: entry.pullRequest.number,
-      entry,
-      own: null,
-      review: null,
-      outcome: null,
-    })),
-    ...recent.map((outcome) => ({
-      number: outcome.number,
-      entry: null,
-      own: null,
-      review: null,
-      outcome,
-    })),
-  ];
-  const selected =
-    selectable.length === 0
-      ? null
-      : selectable[Math.min(selection, selectable.length - 1)]!;
-  const actionable = selected?.entry ?? null;
+  const ownShown = own.slice(0, OWN_LIMIT);
+
+  // Every row is the object its panel renders, so a panel asks whether it holds
+  // the selection rather than matching on a number. Keep this in the order the
+  // panels appear, or the cursor jumps about.
+  const selectable = [...toReview, ...ownShown, ...mine, ...recent];
+  const selected = selectable[Math.min(selection, selectable.length - 1)] ?? null;
+
+  const actionable = mine.find((entry) => entry === selected) ?? null;
   const selectedEntry = actionable?.pullRequest.number ?? null;
-  const selectedOutcome = selected?.outcome ?? null;
-  const selectedReview = selected?.review ?? null;
-  const selectedOwn = selected?.own ?? null;
+  const selectedOutcome = recent.find((outcome) => outcome === selected) ?? null;
+  const selectedReview = toReview.find((review) => review === selected) ?? null;
+  const selectedOwn = ownShown.find((pr) => pr === selected) ?? null;
 
   // Dismissing the dialog aborts the attempt, so a jump that is waiting to rejoin
   // the queue does not land after somebody has cancelled it.
@@ -1116,7 +1118,7 @@ export default function App({
       return setSelection((value) => Math.min(value + 1, Math.max(0, selectable.length - 1)));
     if (key.upArrow) return setSelection((value) => Math.max(0, value - 1));
     if (key.return && selected)
-      return openUrl(pullRequestUrl(target.owner, target.name, selected.number));
+      return openUrl(pullRequestUrl(target.owner, target.name, numberOf(selected)));
     if (input === "o" && queue) return openUrl(queue.url);
     if (input === "e" && actionable)
       return setConfirm({ action: "eject", entry: actionable, focused: false, pending: false, error: null });
@@ -1188,7 +1190,8 @@ export default function App({
       {/* A pull request falls down the screen as it progresses: somebody asks
           you for one, yours wait for the same, then the queue, then gone. */}
       <ToReview
-        reviews={reviews}
+        shown={toReview}
+        total={reviews.length}
         repo={target}
         selected={selectedReview}
         error={reviewError}
@@ -1202,7 +1205,8 @@ export default function App({
       <Box height={1} />
 
       <YourPrs
-        own={own}
+        shown={ownShown}
+        total={own.length}
         repo={target}
         selected={selectedOwn}
         error={ownError}
@@ -1211,10 +1215,7 @@ export default function App({
         inner={width - PANEL_CHROME}
       />
 
-      <Flow
-        label={ready > 0 ? `${ready} ready to queue` : undefined}
-        color={ready > 0 ? "green" : undefined}
-      />
+      <Flow label={ready > 0 ? `${ready} ready to queue` : undefined} color="green" />
 
       <Panel title="QUEUE">
         <Box>
@@ -1294,10 +1295,7 @@ export default function App({
         ) : null}
       </Panel>
 
-      <Flow
-        label={landing ? "yours is next" : undefined}
-        color={landing ? "cyan" : undefined}
-      />
+      <Flow label={landing ? "yours is next" : undefined} />
 
       <Recently
         outcomes={recent}
