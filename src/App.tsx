@@ -573,7 +573,7 @@ function ToReview({
   const withSize = spare >= SIZE_WIDTH + GAP;
 
   return (
-    <Panel title={total > 0 ? `TO REVIEW · ${total}` : "TO REVIEW"}>
+    <Panel title="TO REVIEW">
       {shown.length === 0 ? (
         <Fallback loading={loading} error={error}>
           {praise}
