@@ -102,6 +102,7 @@ const NOTHING_QUEUED = [
   "Nothing of yours in the queue — make something magic ✨",
   "Nothing of yours in the queue — slay 👑",
   "Nothing of yours in the queue — get ticket-maxxing 🚢",
+  "Nothing of yours in the queue — start aura farming 🧑‍🌾",
 ];
 
 function ago(from: Date, now: number): string {
