@@ -253,11 +253,15 @@ function Status({
 
 // null is "more than were counted" — the repository has more open pull requests
 // than one page, so saying a number would be quoting the page size back.
-function More({ hidden }: { hidden: number | null }) {
-  if (hidden !== null && hidden <= 0) return null;
+function More({ above = 0, hidden }: { above?: number; hidden: number | null }) {
+  const below = hidden === null || hidden > 0;
+  if (above <= 0 && !below) return null;
   return (
     <Box marginLeft={CURSOR_WIDTH}>
-      <Text dimColor>…and {hidden ?? "plenty"} more</Text>
+      <Text dimColor>
+        {above > 0 ? `↑ ${above} above${below ? " · " : ""}` : ""}
+        {below ? `…and ${hidden ?? "plenty"} more` : ""}
+      </Text>
     </Box>
   );
 }
@@ -421,6 +425,7 @@ const PR_STATUS_WIDTH = statusWidth(Object.values(PR_STATES));
 
 function YourPrs({
   shown,
+  above,
   total,
   repo,
   selected,
@@ -431,6 +436,7 @@ function YourPrs({
   inner,
 }: {
   shown: Pr[];
+  above: number;
   total: number | null;
   repo: { owner: string; name: string };
   selected: Pr | null;
@@ -440,7 +446,7 @@ function YourPrs({
   now: number;
   inner: number;
 }) {
-  const hidden = total === null ? null : total - shown.length;
+  const hidden = total === null ? null : total - above - shown.length;
   const rows = shown.map((pr) => {
     const state = prState(pr);
     // Whose it is answers the first question about somebody else's pull request;
@@ -491,7 +497,7 @@ function YourPrs({
           <Status state={state} width={PR_STATUS_WIDTH} />
         </Box>
       ))}
-      <More hidden={hidden} />
+      <More above={above} hidden={hidden} />
     </Panel>
   );
 }
@@ -930,6 +936,7 @@ export default function App({
   const [now, setNow] = useState(Date.now());
   const [showAll, setShowAll] = useState(all);
   const [selection, setSelection] = useState(0);
+  const prScroll = useRef(0);
   // One piece of state, so focus and errors cannot outlive the dialog that owns
   // them. Kept apart, a successful action left the destructive button focused and
   // the next dialog opened with it already selected.
@@ -1042,7 +1049,6 @@ export default function App({
   // Sliced once, here, so a panel cannot disagree with the list the cursor walks.
   const recent = outcomes.slice(0, RECENT_LIMIT);
   const toReview = reviews.slice(0, REVIEW_LIMIT);
-  const prsShown = prs.slice(0, PR_LIMIT);
   // A full page back means there are more we never saw, so any total we quote
   // would be the page size rather than the repository's.
   const prsCounted = (prData?.length ?? 0) < PR_FETCH_LIMIT;
@@ -1050,8 +1056,17 @@ export default function App({
   // Every row is the object its panel renders, so a panel asks whether it holds
   // the selection rather than matching on a number. Keep this in the order the
   // panels appear, or the cursor jumps about.
-  const selectable = [...toReview, ...prsShown, ...mine, ...recent];
-  const selected = selectable[Math.min(selection, selectable.length - 1)] ?? null;
+  const selectable = [...toReview, ...prs, ...mine, ...recent];
+  const cursor = Math.min(selection, selectable.length - 1);
+  const selected = selectable[cursor] ?? null;
+
+  const prCursor = cursor - toReview.length;
+  if (prCursor >= 0 && prCursor < prs.length) {
+    if (prCursor < prScroll.current) prScroll.current = prCursor;
+    else if (prCursor >= prScroll.current + PR_LIMIT) prScroll.current = prCursor - PR_LIMIT + 1;
+  }
+  prScroll.current = Math.min(prScroll.current, Math.max(0, prs.length - PR_LIMIT));
+  const prsShown = prs.slice(prScroll.current, prScroll.current + PR_LIMIT);
 
   const actionable = mine.find((entry) => entry === selected) ?? null;
   const selectedEntry = actionable?.pullRequest.number ?? null;
@@ -1197,6 +1212,7 @@ export default function App({
 
       <YourPrs
         shown={prsShown}
+        above={prScroll.current}
         total={prsCounted ? prs.length : null}
         showAuthor={showAll}
         repo={target}
