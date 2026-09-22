@@ -201,7 +201,6 @@ function RowHead({
   );
 }
 
-// Three panels say the same three things while they have no rows to show.
 function Fallback({
   loading,
   error,
@@ -232,8 +231,6 @@ function Fallback({
   return <Text dimColor>{children}</Text>;
 }
 
-// Measured in terminal columns, not code units, so a two-column glyph does not
-// shift the column it sits in.
 function statusWidth(states: { label: string }[]): number {
   return stringWidth("✓ ") + Math.max(...states.map((state) => stringWidth(state.label)));
 }
@@ -265,8 +262,6 @@ function More({ hidden }: { hidden: number | null }) {
   );
 }
 
-// A queue entry keeps its number one level down; everything else in a list
-// carries it directly.
 type Selectable = Entry | Pr | Review | Outcome;
 
 function numberOf(item: Selectable): number {
@@ -389,18 +384,14 @@ function Mine({
   );
 }
 
-// Shared by the two list panels: cursor, number, title, then a right-hand side
-// of fixed columns.
 const AUTHOR_WIDTH = 12;
 const REVIEWER_WIDTH = 14;
 const AGE_WIDTH = 4;
 
-// A title truncated to a handful of words says nothing, so the columns beside it
-// are given up in order of how much each earns its space.
+// A title truncated to a handful of words says nothing, so the columns beside
+// it are dropped before the title shrinks past this.
 const TITLE_FLOOR = 24;
 
-// Everything a list row spends before its optional columns: the cursor, the
-// number, the title's margin, and the age column with its own.
 const ROW_FIXED = CURSOR_WIDTH + NUMBER_WIDTH + GAP + AGE_WIDTH + GAP;
 
 // Ordered by what it is asking you to do, which is also the order the panel
@@ -512,10 +503,9 @@ const REVIEW_STATES = {
   ready: { glyph: "●", label: "ready", color: "green", dim: false },
 };
 
-// The one thing worth knowing before you open it: whether opening it now would
-// be wasted, because they are still working. Somebody else's approval is not
-// that — the request is still yours until you answer it — and reading as
-// "approved" made an untouched pull request look done.
+// Whether opening it now would be wasted, because they are still working.
+// Somebody else's approval is not that: the request is still yours until you
+// answer it, and showing "approved" made an untouched pull request look done.
 function reviewState(review: Review) {
   if (review.checks === "failing") return REVIEW_STATES.broken;
   if (review.decision === "CHANGES_REQUESTED") return REVIEW_STATES.changes;
@@ -911,8 +901,7 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 }
 
 // The gap between two panels was already a blank row, so the connector that
-// makes them read as one pipeline costs no height. It earns the space by
-// lighting up when something of yours is about to move down it.
+// makes them read as one pipeline costs no height.
 function Flow({ label, color = "cyan" }: { label?: string; color?: string }) {
   const lit = Boolean(label);
   return (
@@ -1046,8 +1035,7 @@ export default function App({
           prState(a).rank - prState(b).rank || b.updatedAt.getTime() - a.updatedAt.getTime(),
       );
 
-  // What is poised to fall through each join, which is what lights the arrow
-  // between the two panels it joins.
+  // Lights the arrow between the panels either one joins.
   const ready = prs.filter((pr) => prState(pr) === PR_STATES.approved).length;
   const landing = mine.some((entry) => entry.position === 1);
 

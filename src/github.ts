@@ -136,8 +136,8 @@ const RATE_SAMPLE = 100;
 const ROLLUP = "commits(last:1){ nodes{ commit{ statusCheckRollup{ state } } } }";
 
 // One document for every panel, so they cannot describe different instants.
-// GitHub prices a query by the nodes it asks for rather than by how many fields
-// ask, so all of this costs the one point the cheapest of them cost alone.
+// GitHub prices a query by the nodes it asks for rather than by the fields, so
+// asking for all of this costs what the smallest of them would cost alone.
 const DASHBOARD = `
 query($owner:String!,$name:String!,$branch:String!,$reviews:String!,$prs:String!,$outcomes:String!,$rate:String!){
   viewer{ login }
@@ -514,9 +514,9 @@ const ALREADY_QUEUED = "already in the queue";
 const REJOIN_ATTEMPTS = 5;
 const REJOIN_WAIT_MS = 600;
 
-// GitHub exposes no viewerCan* field for either of these, so whether you are
-// allowed is only discoverable by asking. Ejecting needs write access; jumping
-// is admin-only by default and undocumented, so the error is the interface.
+// GitHub exposes no viewerCan* field for either of these, so the only way to
+// learn you are not allowed is the error. Ejecting needs write access; jumping
+// is admin-only by default, and undocumented.
 export async function act(opts: {
   token: string;
   action: Action;

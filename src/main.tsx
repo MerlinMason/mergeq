@@ -74,11 +74,12 @@ async function main() {
   // Timers do not fire while the machine sleeps, so a tick arriving far later
   // than it was due means it just woke — and sleeping is the one moment a
   // terminal can be resized without a resize event being delivered, leaving Ink
-  // drawing to a width that no longer exists. Ink recomputes and redraws on that
-  // event, and only it knows how, so say the size may have changed and let it
-  // decide. Clearing by hand does not work: Ink.clear() re-seeds log-update with
-  // the frame it just erased, so an unchanged render writes nothing and the
-  // screen stays blank.
+  // drawing to a width that no longer exists. Saying the size may have changed
+  // hands the redraw to Ink.
+  //
+  // Clearing by hand does not work: Ink.clear() re-seeds log-update with the
+  // frame it just erased, so an unchanged render writes nothing and the screen
+  // stays blank.
   const TICK = 5_000;
   let previousTick = Date.now();
   const watchForWake = setInterval(() => {
