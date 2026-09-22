@@ -676,21 +676,11 @@ function Recently({
   );
 }
 
-function Empty({ outcomes, now }: { outcomes: Outcome[]; now: number }) {
-  const lastMerge = outcomes.find((o) => o.kind === "merged");
+function Empty() {
   const [greeting] = useState(
     () => NOTHING_QUEUED[Math.floor(Math.random() * NOTHING_QUEUED.length)]!,
   );
-  return (
-    <>
-      <Text>{greeting}</Text>
-      {lastMerge ? (
-        <Text dimColor>
-          You last shipped #{lastMerge.number} · {ago(lastMerge.at, now)} ago
-        </Text>
-      ) : null}
-    </>
-  );
+  return <Text dimColor>{greeting}</Text>;
 }
 
 function AllRow({
@@ -1303,7 +1293,7 @@ export default function App({
             </React.Fragment>
           ))
         ) : queue ? (
-          <Empty outcomes={outcomes} now={now} />
+          <Empty />
         ) : null}
       </Panel>
 
