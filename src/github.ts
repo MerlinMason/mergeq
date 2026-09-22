@@ -26,41 +26,6 @@ export type Queue = {
   maximumEntriesToBuild: number | null;
   totalCount: number;
   entries: Entry[];
-  viewer: string;
-};
-
-const QUEUE_PAGE = 100;
-
-const QUERY = `
-query($owner:String!,$name:String!,$branch:String!){
-  viewer{ login }
-  repository(owner:$owner,name:$name){
-    mergeQueue(branch:$branch){
-      url
-      configuration{ maximumEntriesToBuild }
-      entries(first:${QUEUE_PAGE}){
-        totalCount
-        nodes{
-          position
-          state
-          estimatedTimeToMerge
-          headCommit{ oid }
-          pullRequest{ id number title author{ login } }
-        }
-      }
-    }
-  }
-}`;
-
-type QueueData = {
-  viewer: { login: string } | null;
-  repository: {
-    mergeQueue: {
-      url: string;
-      configuration: { maximumEntriesToBuild: number | null } | null;
-      entries: { totalCount: number; nodes: (Entry | null)[] };
-    } | null;
-  } | null;
 };
 
 export type Checks = {
@@ -107,40 +72,6 @@ export type Pr = {
   reviewers: string[];
 };
 
-const OUTCOME_FETCH_LIMIT = 12;
-
-// A type:ISSUE search can return something that is not a pull request, and the
-// inline fragment then yields an empty object rather than nothing at all — so
-// every caller has to drop the nodes that came back without a number.
-async function search<T extends { number: number }>(opts: {
-  token: string;
-  first: number;
-  fields: string;
-  terms: (string | false)[];
-}): Promise<T[]> {
-  const data = await graphql<{ search: { nodes: (T | null)[] } }>(
-    opts.token,
-    `query($q:String!){ search(query:$q, type:ISSUE, first:${opts.first}){ nodes{ ... on PullRequest {
-      ${opts.fields}
-    }}}}`,
-    { q: opts.terms.filter(Boolean).join(" ") },
-  );
-
-  return data.search.nodes.filter((node): node is T => Boolean(node?.number));
-}
-
-const ROLLUP = "commits(last:1){ nodes{ commit{ statusCheckRollup{ state } } } }";
-
-type RollupNode = { commits: { nodes: { commit: { statusCheckRollup: { state: string } | null } }[] } };
-
-function rollup(node: RollupNode): ReviewChecks {
-  const state = node.commits.nodes[0]?.commit.statusCheckRollup?.state;
-  if (!state) return null;
-  if (state === "FAILURE" || state === "ERROR") return "failing";
-  if (state === "SUCCESS") return "passing";
-  return "running";
-}
-
 export function outcomeKey(outcome: Outcome): string {
   return `${outcome.number}-${outcome.at.getTime()}`;
 }
@@ -163,11 +94,13 @@ function httpFailure(status: number, sso: boolean, statusText: string): Error {
   return new Error(`GitHub returned ${status} ${statusText}`);
 }
 
-async function graphql<T>(
+// One reply can carry both data and the reasons part of it is missing. Only
+// the dashboard has any use for a half answer; everything else wants `graphql`.
+async function request<T>(
   token: string,
   query: string,
   variables: object,
-): Promise<T> {
+): Promise<{ data: T | null; errors: string[] }> {
   const res = await fetch("https://api.github.com/graphql", {
     method: "POST",
     headers: {
@@ -182,10 +115,328 @@ async function graphql<T>(
     throw httpFailure(res.status, Boolean(res.headers.get("x-github-sso")), res.statusText);
   }
 
-  const body = (await res.json()) as { data?: T; errors?: { message: string }[] };
-  if (body.errors?.length) throw new Error(body.errors.map((e) => e.message).join("; "));
-  if (!body.data) throw new Error("GitHub returned no data");
-  return body.data;
+  const body = (await res.json()) as { data?: T | null; errors?: { message: string }[] };
+  return { data: body.data ?? null, errors: (body.errors ?? []).map((error) => error.message) };
+}
+
+async function graphql<T>(token: string, query: string, variables: object): Promise<T> {
+  const { data, errors } = await request<T>(token, query, variables);
+  if (errors.length) throw new Error(errors.join("; "));
+  if (!data) throw new Error("GitHub returned no data");
+  return data;
+}
+
+const QUEUE_PAGE = 100;
+export const PR_FETCH_LIMIT = 20;
+const REVIEW_FETCH_LIMIT = 25;
+const OUTCOME_SEARCH = 50;
+const OUTCOME_LIMIT = 12;
+const RATE_SAMPLE = 100;
+
+const ROLLUP = "commits(last:1){ nodes{ commit{ statusCheckRollup{ state } } } }";
+
+// One document for every panel, so they cannot describe different instants.
+// GitHub prices a query by the nodes it asks for rather than by how many fields
+// ask, so all of this costs the one point the cheapest of them cost alone.
+const DASHBOARD = `
+query($owner:String!,$name:String!,$branch:String!,$reviews:String!,$prs:String!,$outcomes:String!,$rate:String!){
+  viewer{ login }
+  repository(owner:$owner,name:$name){
+    mergeQueue(branch:$branch){
+      url
+      configuration{ maximumEntriesToBuild }
+      entries(first:${QUEUE_PAGE}){
+        totalCount
+        nodes{
+          position
+          state
+          estimatedTimeToMerge
+          headCommit{ oid }
+          pullRequest{ id number title author{ login } }
+        }
+      }
+    }
+  }
+  reviews: search(query:$reviews, type:ISSUE, first:${REVIEW_FETCH_LIMIT}){ nodes{ ... on PullRequest {
+    number title createdAt additions deletions reviewDecision
+    author{ login }
+    ${ROLLUP}
+    requests: timelineItems(last:20, itemTypes:[REVIEW_REQUESTED_EVENT]){ nodes{ ... on ReviewRequestedEvent {
+      createdAt requestedReviewer{ __typename ... on User { login } }
+    }}}
+  }}}
+  prs: search(query:$prs, type:ISSUE, first:${PR_FETCH_LIMIT}){ nodes{ ... on PullRequest {
+    number title isDraft updatedAt reviewDecision
+    author{ login }
+    ${ROLLUP}
+    reviewRequests(first:5){ nodes{ requestedReviewer{
+      ... on User { login } ... on Team { slug }
+    }}}
+  }}}
+  outcomes: search(query:$outcomes, type:ISSUE, first:${OUTCOME_SEARCH}){ nodes{ ... on PullRequest {
+    number title
+    author{ login }
+    removed: timelineItems(last:3, itemTypes:[REMOVED_FROM_MERGE_QUEUE_EVENT]){ nodes{ ... on RemovedFromMergeQueueEvent {
+      createdAt reason
+    }}}
+  }}}
+  rate: search(query:$rate, type:ISSUE, first:${RATE_SAMPLE}){ nodes{ ... on PullRequest { number mergedAt } } }
+}`;
+
+type RollupNode = { commits: { nodes: { commit: { statusCheckRollup: { state: string } | null } }[] } };
+
+type ReviewNode = RollupNode & {
+  number: number;
+  title: string;
+  createdAt: string;
+  additions: number;
+  deletions: number;
+  author: { login: string } | null;
+  reviewDecision: Review["decision"];
+  requests: {
+    nodes: { createdAt: string; requestedReviewer: { __typename: string; login?: string } | null }[];
+  };
+};
+
+type PrNode = RollupNode & {
+  number: number;
+  title: string;
+  isDraft: boolean;
+  updatedAt: string;
+  author: { login: string } | null;
+  reviewDecision: Review["decision"];
+  reviewRequests: { nodes: { requestedReviewer: { login?: string; slug?: string } | null }[] };
+};
+
+type OutcomeNode = {
+  number: number;
+  title: string;
+  author: { login: string } | null;
+  removed: { nodes: { createdAt: string; reason: string | null }[] };
+};
+
+type MergedNode = { number: number; mergedAt: string | null };
+
+type Search<T> = { nodes: (T | null)[] } | null;
+
+type DashboardData = {
+  viewer: { login: string } | null;
+  repository: {
+    mergeQueue: {
+      url: string;
+      configuration: { maximumEntriesToBuild: number | null } | null;
+      entries: { totalCount: number; nodes: (Entry | null)[] };
+    } | null;
+  } | null;
+  reviews: Search<ReviewNode>;
+  prs: Search<PrNode>;
+  outcomes: Search<OutcomeNode>;
+  rate: Search<MergedNode>;
+};
+
+export type Section = "queue" | "reviews" | "prs" | "outcomes" | "rate";
+
+/**
+ * A section GitHub did not answer for is null and named in `missing` — which
+ * means unanswered, not empty, so the caller can keep what it had.
+ */
+export type Snapshot = {
+  at: Date;
+  viewer: string;
+  queue: Queue | null;
+  reviews: Review[] | null;
+  prs: Pr[] | null;
+  outcomes: Outcome[] | null;
+  rate: Rate | null;
+  missing: Section[];
+};
+
+function rollup(node: RollupNode): ReviewChecks {
+  const state = node.commits.nodes[0]?.commit.statusCheckRollup?.state;
+  if (!state) return null;
+  if (state === "FAILURE" || state === "ERROR") return "failing";
+  if (state === "SUCCESS") return "passing";
+  return "running";
+}
+
+// A type:ISSUE search can return something that is not a pull request, and the
+// inline fragment then yields an empty object rather than nothing at all.
+function rows<T extends { number: number }>(search: Search<T>): T[] | null {
+  if (!search) return null;
+  return search.nodes.filter((node): node is T => Boolean(node?.number));
+}
+
+function terms(...parts: (string | false)[]): string {
+  return parts.filter(Boolean).join(" ");
+}
+
+function toReviews(nodes: ReviewNode[], login: string): Review[] {
+  return nodes
+    .map((node) => {
+      const events = node.requests.nodes.filter((event) => event?.createdAt);
+      // Requests to a team carry the team, not you, so when nothing names you
+      // the most recent request of any kind is the closest thing to a clock.
+      const mine = events.filter((event) => event.requestedReviewer?.login === login);
+      const asked = (mine.length > 0 ? mine : events).at(-1);
+
+      return {
+        number: node.number,
+        title: node.title,
+        author: node.author?.login ?? "unknown",
+        additions: node.additions,
+        deletions: node.deletions,
+        requestedAt: new Date(asked?.createdAt ?? node.createdAt),
+        decision: node.reviewDecision,
+        checks: rollup(node),
+      };
+    })
+    .sort((a, b) => a.requestedAt.getTime() - b.requestedAt.getTime());
+}
+
+function toPrs(nodes: PrNode[]): Pr[] {
+  return nodes.map((node) => ({
+    number: node.number,
+    title: node.title,
+    author: node.author?.login ?? "unknown",
+    draft: node.isDraft,
+    updatedAt: new Date(node.updatedAt),
+    decision: node.reviewDecision,
+    checks: rollup(node),
+    reviewers: node.reviewRequests.nodes
+      .map((request) => request.requestedReviewer?.login ?? request.requestedReviewer?.slug)
+      .filter((who): who is string => Boolean(who)),
+  }));
+}
+
+function toOutcomes(nodes: OutcomeNode[]): Outcome[] {
+  const outcomes: Outcome[] = [];
+
+  for (const node of nodes) {
+    for (const removal of node.removed.nodes) {
+      outcomes.push({
+        number: node.number,
+        title: node.title,
+        author: node.author?.login ?? "unknown",
+        kind: removal.reason === "merged" ? "merged" : "ejected",
+        reason: removal.reason ?? "removed",
+        at: new Date(removal.createdAt),
+      });
+    }
+  }
+
+  return outcomes.sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, OUTCOME_LIMIT);
+}
+
+// A gap longer than this means nobody was queueing, not that the queue was slow.
+const IDLE_GAP_CEILING_MINUTES = 30;
+
+const RATE_WINDOW_HOURS = 24;
+const RATE_MIN_SAMPLE = 5;
+
+function toRate(nodes: MergedNode[]): Rate | null {
+  const times = nodes
+    .map((node) => (node.mergedAt ? new Date(node.mergedAt).getTime() : 0))
+    .filter((time) => time > 0)
+    .sort((a, b) => b - a);
+
+  if (times.length < RATE_MIN_SAMPLE) return null;
+
+  // GitHub merges in batches, so most gaps are the split second between two pull
+  // requests landing together. A median picks one of those and promises a wait of
+  // almost nothing.
+  const ceiling = IDLE_GAP_CEILING_MINUTES * 60_000;
+  let total = 0;
+  for (let i = 1; i < times.length; i++) total += Math.min(times[i - 1]! - times[i]!, ceiling);
+
+  const gapMinutes = total / (times.length - 1) / 60_000;
+  if (gapMinutes <= 0) return null;
+
+  return { gapMinutes };
+}
+
+export async function fetchDashboard(opts: {
+  token: string;
+  owner: string;
+  name: string;
+  branch: string;
+  as?: string;
+  mine: boolean;
+}): Promise<Snapshot> {
+  const repo = `repo:${opts.owner}/${opts.name}`;
+  // `@me` saves a round trip: otherwise the searches wait for the login this
+  // same query is fetching. Only --as has to name somebody.
+  const author = opts.mine && `author:${opts.as ?? "@me"}`;
+  const since = new Date(Date.now() - RATE_WINDOW_HOURS * 3600_000).toISOString().slice(0, 19) + "Z";
+
+  const { data, errors } = await request<DashboardData>(opts.token, DASHBOARD, {
+    owner: opts.owner,
+    name: opts.name,
+    branch: opts.branch,
+    reviews: terms(
+      repo,
+      "is:pr is:open draft:false",
+      // user-review-requested counts a request made to a team you are in;
+      // review-requested does not, but is the only one that takes a name
+      // other than your own.
+      opts.as ? `review-requested:${opts.as}` : "user-review-requested:@me",
+      "sort:updated-desc",
+    ),
+    prs: terms(repo, "is:pr is:open", author, "sort:updated-desc"),
+    outcomes: terms(repo, "is:pr", author, "sort:updated-desc"),
+    // sort:updated-desc sorts by when a pull request was last touched, not when
+    // it merged. Without merged:>=, an old one with a recent comment lands in
+    // the sample and stretches the window.
+    rate: terms(repo, "is:pr is:merged", `merged:>=${since}`, "sort:updated-desc"),
+  });
+
+  if (!data) throw new Error(errors[0] ?? "GitHub returned no data");
+
+  // A null alongside errors is GitHub failing to answer, and the caller keeps
+  // what it had. The same null in a clean reply means the thing is not there.
+  const broken = errors.length > 0;
+
+  if (!data.repository && !broken) {
+    throw new SetupError(`Cannot see ${opts.owner}/${opts.name} — it may be private or need SSO.`, [
+      "gh auth refresh -h github.com -s repo",
+    ]);
+  }
+
+  if (data.repository && !data.repository.mergeQueue && !broken) {
+    throw new SetupError(`No merge queue configured on ${opts.owner}/${opts.name}#${opts.branch}.`, [
+      "Pass --branch <name> if the queue is on another branch",
+    ]);
+  }
+
+  const merging = data.repository?.mergeQueue ?? null;
+  const viewer = opts.as ?? data.viewer?.login ?? "";
+  const reviews = rows(data.reviews);
+  const prs = rows(data.prs);
+  const outcomes = rows(data.outcomes);
+  const merged = rows(data.rate);
+
+  const sections: [Section, unknown][] = [
+    ["queue", merging],
+    ["reviews", reviews],
+    ["prs", prs],
+    ["outcomes", outcomes],
+    ["rate", merged],
+  ];
+
+  return {
+    at: new Date(),
+    viewer,
+    queue: merging && {
+      url: merging.url,
+      maximumEntriesToBuild: merging.configuration?.maximumEntriesToBuild ?? null,
+      totalCount: merging.entries.totalCount,
+      entries: merging.entries.nodes.filter((node): node is Entry => node !== null),
+    },
+    reviews: reviews && toReviews(reviews, viewer),
+    prs: prs && toPrs(prs),
+    outcomes: outcomes && toOutcomes(outcomes),
+    rate: merged && toRate(merged),
+    missing: sections.filter(([, value]) => !value).map(([section]) => section),
+  };
 }
 
 export async function fetchChecks(opts: {
@@ -254,212 +505,6 @@ export async function fetchChecks(opts: {
   return result;
 }
 
-export async function fetchOutcomes(opts: {
-  token: string;
-  owner: string;
-  name: string;
-  login?: string;
-}): Promise<Outcome[]> {
-  type Node = {
-    number: number;
-    title: string;
-    author: { login: string } | null;
-    removed: { nodes: { createdAt: string; reason: string | null }[] };
-  };
-
-  const nodes = await search<Node>({
-    token: opts.token,
-    first: 50,
-    fields: `number title author{ login }
-      removed: timelineItems(last:3, itemTypes:[REMOVED_FROM_MERGE_QUEUE_EVENT]){ nodes{ ... on RemovedFromMergeQueueEvent { createdAt reason } } }`,
-    terms: [
-      `repo:${opts.owner}/${opts.name}`,
-      Boolean(opts.login) && `author:${opts.login}`,
-      "is:pr sort:updated-desc",
-    ],
-  });
-
-  const outcomes: Outcome[] = [];
-
-  for (const node of nodes) {
-    for (const removal of node.removed.nodes) {
-      outcomes.push({
-        number: node.number,
-        title: node.title,
-        author: node.author?.login ?? "unknown",
-        kind: removal.reason === "merged" ? "merged" : "ejected",
-        reason: removal.reason ?? "removed",
-        at: new Date(removal.createdAt),
-      });
-    }
-  }
-
-  return outcomes.sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, OUTCOME_FETCH_LIMIT);
-}
-
-export const PR_FETCH_LIMIT = 20;
-
-// Without a login this is every open pull request in the repository, newest
-// first, which is what the panel shows once you ask for everybody's.
-export async function fetchPrs(opts: {
-  token: string;
-  owner: string;
-  name: string;
-  login?: string;
-}): Promise<Pr[]> {
-  type Node = RollupNode & {
-    number: number;
-    title: string;
-    isDraft: boolean;
-    updatedAt: string;
-    author: { login: string } | null;
-    reviewDecision: Review["decision"];
-    reviewRequests: {
-      nodes: { requestedReviewer: { login?: string; slug?: string } | null }[];
-    };
-  };
-
-  const nodes = await search<Node>({
-    token: opts.token,
-    first: PR_FETCH_LIMIT,
-    fields: `number title isDraft updatedAt reviewDecision
-      author{ login }
-      ${ROLLUP}
-      reviewRequests(first:5){ nodes{ requestedReviewer{
-        ... on User { login } ... on Team { slug }
-      }}}`,
-    terms: [
-      `repo:${opts.owner}/${opts.name}`,
-      "is:pr is:open",
-      Boolean(opts.login) && `author:${opts.login}`,
-      "sort:updated-desc",
-    ],
-  });
-
-  return nodes.map((node) => ({
-    number: node.number,
-    title: node.title,
-    author: node.author?.login ?? "unknown",
-    draft: node.isDraft,
-    updatedAt: new Date(node.updatedAt),
-    decision: node.reviewDecision,
-    checks: rollup(node),
-    reviewers: node.reviewRequests.nodes
-      .map((request) => request.requestedReviewer?.login ?? request.requestedReviewer?.slug)
-      .filter((who): who is string => Boolean(who)),
-  }));
-}
-
-const REVIEW_FETCH_LIMIT = 25;
-
-export async function fetchReviews(opts: {
-  token: string;
-  owner: string;
-  name: string;
-  login: string;
-  self: boolean;
-}): Promise<Review[]> {
-  type Requested = {
-    createdAt: string;
-    requestedReviewer: { __typename: string; login?: string } | null;
-  };
-
-  type Node = RollupNode & {
-    number: number;
-    title: string;
-    createdAt: string;
-    additions: number;
-    deletions: number;
-    author: { login: string } | null;
-    reviewDecision: Review["decision"];
-    requests: { nodes: Requested[] };
-  };
-
-  const nodes = await search<Node>({
-    token: opts.token,
-    first: REVIEW_FETCH_LIMIT,
-    fields: `number title createdAt additions deletions
-      author{ login }
-      reviewDecision
-      ${ROLLUP}
-      requests: timelineItems(last:20, itemTypes:[REVIEW_REQUESTED_EVENT]){ nodes{ ... on ReviewRequestedEvent {
-        createdAt requestedReviewer{ __typename ... on User { login } }
-      }}}`,
-    terms: [
-      `repo:${opts.owner}/${opts.name}`,
-      "is:pr is:open draft:false",
-      // user-review-requested counts a request made to a team you are in;
-      // review-requested does not, but is the only one that takes a name
-      // other than your own.
-      opts.self ? "user-review-requested:@me" : `review-requested:${opts.login}`,
-      "sort:updated-desc",
-    ],
-  });
-
-  return nodes
-    .map((node) => {
-      const events = node.requests.nodes.filter((event) => event?.createdAt);
-      // Requests to a team carry the team, not you, so when nothing names you
-      // the most recent request of any kind is the closest thing to a clock.
-      const mine = events.filter((event) => event.requestedReviewer?.login === opts.login);
-      const asked = (mine.length > 0 ? mine : events).at(-1);
-
-      return {
-        number: node.number,
-        title: node.title,
-        author: node.author?.login ?? "unknown",
-        additions: node.additions,
-        deletions: node.deletions,
-        requestedAt: new Date(asked?.createdAt ?? node.createdAt),
-        decision: node.reviewDecision,
-        checks: rollup(node),
-      };
-    })
-    .sort((a, b) => a.requestedAt.getTime() - b.requestedAt.getTime());
-}
-
-// A gap longer than this means nobody was queueing, not that the queue was slow.
-const IDLE_GAP_CEILING_MINUTES = 30;
-
-const RATE_WINDOW_HOURS = 24;
-const RATE_MIN_SAMPLE = 5;
-
-export async function fetchRate(opts: {
-  token: string;
-  owner: string;
-  name: string;
-}): Promise<Rate | null> {
-  const since = new Date(Date.now() - RATE_WINDOW_HOURS * 3600_000).toISOString().slice(0, 19) + "Z";
-
-  const data = await graphql<{ search: { nodes: { mergedAt: string | null }[] } }>(
-    opts.token,
-    `query($q:String!){ search(query:$q, type:ISSUE, first:100){ nodes{ ... on PullRequest { mergedAt } } } }`,
-    // sort:updated-desc sorts by when a pull request was last touched, not when
-    // it merged. Without merged:>=, an old one with a recent comment lands in
-    // the sample and stretches the window.
-    { q: `repo:${opts.owner}/${opts.name} is:pr is:merged merged:>=${since} sort:updated-desc` },
-  );
-
-  const times = data.search.nodes
-    .map((n) => (n.mergedAt ? new Date(n.mergedAt).getTime() : 0))
-    .filter((t) => t > 0)
-    .sort((a, b) => b - a);
-
-  if (times.length < RATE_MIN_SAMPLE) return null;
-
-  // GitHub merges in batches, so most gaps are the split second between two pull
-  // requests landing together. A median picks one of those and promises a wait of
-  // almost nothing.
-  const ceiling = IDLE_GAP_CEILING_MINUTES * 60_000;
-  let total = 0;
-  for (let i = 1; i < times.length; i++) total += Math.min(times[i - 1]! - times[i]!, ceiling);
-
-  const gapMinutes = total / (times.length - 1) / 60_000;
-  if (gapMinutes <= 0) return null;
-
-  return { gapMinutes };
-}
-
 export type Action = "eject" | "jump";
 
 const DEQUEUE = `mutation($id:ID!){ dequeuePullRequest(input:{ id:$id }){ clientMutationId } }`;
@@ -509,41 +554,4 @@ export async function act(opts: {
       throw new Error(`It left the queue but could not rejoin at the front — ${message}`);
     }
   }
-}
-
-export async function fetchQueue(opts: {
-  token: string;
-  owner: string;
-  name: string;
-  branch: string;
-}): Promise<Queue> {
-  const data = await graphql<QueueData>(opts.token, QUERY, {
-    owner: opts.owner,
-    name: opts.name,
-    branch: opts.branch,
-  });
-
-  const repo = data.repository;
-  if (!repo) {
-    throw new SetupError(
-      `Cannot see ${opts.owner}/${opts.name} — it may be private or need SSO.`,
-      ["gh auth refresh -h github.com -s repo"],
-    );
-  }
-
-  const queue = repo.mergeQueue;
-  if (!queue) {
-    throw new SetupError(
-      `No merge queue configured on ${opts.owner}/${opts.name}#${opts.branch}.`,
-      ["Pass --branch <name> if the queue is on another branch"],
-    );
-  }
-
-  return {
-    url: queue.url,
-    maximumEntriesToBuild: queue.configuration?.maximumEntriesToBuild ?? null,
-    totalCount: queue.entries.totalCount,
-    entries: queue.entries.nodes.filter((n): n is Entry => n !== null),
-    viewer: data.viewer?.login ?? "",
-  };
 }

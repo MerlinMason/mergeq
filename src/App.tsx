@@ -3,8 +3,8 @@ import { Box, Spacer, Text, useAnimation, useApp, useInput, useWindowSize } from
 import Gradient from "ink-gradient";
 import stringWidth from "string-width";
 import { TitledBox, titleStyles } from "@mishieck/ink-titled-box";
-import { useQueue, type Target } from "./useQueue.js";
-import { usePoll } from "./usePoll.js";
+import { useDashboard, type Target } from "./useDashboard.js";
+import { useClock } from "./useClock.js";
 import { notify } from "./notify.js";
 import { SetupError } from "./auth.js";
 import { link, openUrl, pullRequestUrl } from "./link.js";
@@ -13,10 +13,6 @@ import { link, openUrl, pullRequestUrl } from "./link.js";
 import { version } from "../package.json" with { type: "json" };
 import {
   act,
-  fetchOutcomes,
-  fetchPrs,
-  fetchRate,
-  fetchReviews,
   outcomeKey,
   PR_FETCH_LIMIT,
   type Action,
@@ -532,6 +528,8 @@ const REVIEW_STATUS_WIDTH = statusWidth(Object.values(REVIEW_STATES));
 
 const DAY = 86_400_000;
 
+const STALE_AFTER = 30_000;
+
 function waitColor(waited: number): string {
   if (waited > 3 * DAY) return "red";
   if (waited > DAY) return "yellow";
@@ -951,7 +949,6 @@ export default function App({
 }) {
   const { exit } = useApp();
   const { columns: width } = useWindowSize();
-  const { queue, viewer, checks, error, fetching, updatedAt } = useQueue(target, interval);
   const [now, setNow] = useState(Date.now());
   const [showAll, setShowAll] = useState(all);
   const [selection, setSelection] = useState(0);
@@ -960,38 +957,30 @@ export default function App({
   // the next dialog opened with it already selected.
   const [confirm, setConfirm] = useState<Confirming | null>(null);
 
-  const loadOutcomes = useCallback(
-    () => fetchOutcomes({ ...target, login: showAll ? undefined : viewer }),
-    [target, viewer, showAll],
-  );
-  const loadRate = useCallback(() => fetchRate(target), [target]);
-  const loadReviews = useCallback(
-    () => fetchReviews({ ...target, login: viewer, self: !target.as }),
-    [target, viewer],
-  );
-  const loadPrs = useCallback(
-    () => fetchPrs({ ...target, login: showAll ? undefined : viewer }),
-    [target, viewer, showAll],
-  );
+  const tick = useClock(interval);
+  const {
+    queue,
+    reviews: reviewData,
+    prs: prData,
+    outcomes: outcomeData,
+    rate,
+    at: updatedAt,
+    viewer,
+    checks,
+    fatal,
+    failing,
+    fetching,
+  } = useDashboard(target, tick, !showAll);
 
-  const {
-    data: outcomeData,
-    error: outcomeError,
-    loading: outcomesLoading,
-  } = usePoll(viewer ? loadOutcomes : null, 60_000);
-  const { data: rate } = usePoll(loadRate, 300_000);
-  const {
-    data: reviewData,
-    error: reviewError,
-    loading: reviewsLoading,
-  } = usePoll(viewer ? loadReviews : null, 60_000);
-  const {
-    data: prData,
-    error: prError,
-    loading: prLoading,
-  } = usePoll(viewer ? loadPrs : null, 60_000);
   const outcomes = outcomeData ?? NO_OUTCOMES;
   const reviews = reviewData ?? NO_REVIEWS;
+
+  // A panel with rows keeps them and lets the header date them. Only one that
+  // has never had any reports the failure itself.
+  const blank = (rows: unknown[] | null) => ({
+    loading: rows === null && !failing,
+    error: rows === null ? failing : null,
+  });
 
   const seen = useRef<Set<string> | null>(null);
 
@@ -1045,7 +1034,9 @@ export default function App({
     return () => clearInterval(id);
   }, []);
 
-  const stale = updatedAt !== null && now - updatedAt.getTime() > 30_000;
+  // Say how old once a refresh has failed, or once one is late enough to have
+  // been missed — a sleeping laptop fires no timers.
+  const stale = updatedAt !== null && (Boolean(failing) || now - updatedAt.getTime() > STALE_AFTER);
   const entries = queue?.entries ?? [];
   const depth = queue?.totalCount ?? 0;
   const mine = entries.filter((entry) => entry.pullRequest.author?.login === viewer);
@@ -1156,15 +1147,15 @@ export default function App({
     );
   }
 
-  if (error instanceof SetupError) {
+  if (fatal) {
     return (
       <Box flexDirection="column" paddingX={1}>
         <Box>
           <Badge />
         </Box>
         <Box flexDirection="column" marginTop={1}>
-          <Text color="red">✗ {error.message}</Text>
-          {error.hint.map((line) => (
+          <Text color="red">✗ {fatal.message}</Text>
+          {fatal.hint.map((line) => (
             <Text key={line} color="gray">
               {"  "}
               {line}
@@ -1218,8 +1209,7 @@ export default function App({
         total={reviews.length}
         repo={target}
         selected={selectedReview}
-        error={reviewError}
-        loading={reviewsLoading}
+        {...blank(reviewData)}
         now={now}
         inner={width - PANEL_CHROME}
       />
@@ -1234,8 +1224,7 @@ export default function App({
         showAuthor={showAll}
         repo={target}
         selected={selectedPr}
-        error={prError}
-        loading={prLoading}
+        {...blank(prData)}
         now={now}
         inner={width - PANEL_CHROME}
       />
@@ -1269,10 +1258,9 @@ export default function App({
             <Text color="gray">connecting…</Text>
           )}
           <Spacer />
-          {error ? <Text color="red">retrying…</Text> : null}
-          {!error && stale ? (
-            <Text color="yellow" dimColor>
-              last update {ago(updatedAt!, now)} ago
+          {stale ? (
+            <Text color="yellow">
+              {failing ? "stale · " : ""}last update {ago(updatedAt!, now)} ago
             </Text>
           ) : null}
         </Box>
@@ -1327,8 +1315,7 @@ export default function App({
         repo={target}
         selected={selectedOutcome}
         showAuthor={showAll}
-        error={outcomeError}
-        loading={outcomesLoading}
+        {...blank(outcomeData)}
         now={now}
       />
     </Box>

@@ -13,7 +13,7 @@ const HELP = `
     --repo      Repository to watch (defaults to $MERGEQ_REPO, then the
                 current directory's repo)
     --branch    Queued branch (defaults to the repository's default branch)
-    --interval  Seconds between polls (default 5)
+    --interval  Seconds between refreshes (default 5, minimum 2)
     --all       Start on the full queue rather than just your pull requests
     --as        A GitHub username to follow instead of your own
 
@@ -54,6 +54,8 @@ async function main() {
   const [token, repo] = await Promise.all([resolveToken(), resolveRepo(spec)]);
 
   const branch = flag("branch") ?? repo.defaultBranch;
+  // The floor is a rate limit, not a preference: a tick costs one of the 5000
+  // GraphQL points an hour buys, two when something of yours is queued.
   const seconds = Number(flag("interval") ?? 5);
   const interval = Math.max(2, Number.isFinite(seconds) ? seconds : 5) * 1000;
 

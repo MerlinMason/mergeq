@@ -68,6 +68,46 @@ const lines = frame.replace(/\x1b\]8;;[^\x07]*\x07/g, "")
   `overflowX="hidden"` bleeds into neighbouring rows. `PANEL_CHROME` arithmetic is
   deliberate — replacing it with flexbox has already been tried and reverted.
 
+## One query, one clock
+
+Every panel comes from the single `DASHBOARD` document, fired by one clock
+(`useClock`), so `--interval` is the only knob. You need both. Separate timers
+on an identical interval drift apart within a minute, because each waits from
+when its own request finished. And even in step, the queue answers in 0.5s
+while the searches take 1.5s, so the panels would paint a second apart.
+
+GitHub prices a query by nodes, not by fields, so this costs what the cheapest
+single search used to: measured `cost` is 1 at `nodeCount` 1090, against 5 for
+the five calls it replaced. That is what the 2 second floor is protecting — 5000
+points an hour, shared with `gh` and everything else on the same token. Measure
+before widening anything:
+
+```bash
+gh api graphql -f query='query{ rateLimit{cost remaining limit nodeCount} ... }'
+```
+
+Combining costs time: the one document takes ~2.2s against ~1.5s for the
+slowest of the five in parallel. Fine at a 5s tick, and the reason the floor is
+2 and not lower.
+
+`fetchChecks` stays a second round trip because it is keyed by the commit oids
+the first reply carries. Folding it into the entries instead would ask for 100
+entries × 100 contexts — about 100 points — so it is left conditional, and only
+fires for your own queued pull requests.
+
+## A reply can be half an answer
+
+GraphQL returns `data` and `errors` together, so `request()` hands both back and
+only `graphql()` throws. The dashboard needs the difference: a section that came
+back null is named in `missing` and the hook keeps the rows it already had,
+because stale rows with an honest age beat a blank panel.
+
+The same null means opposite things depending on the company it keeps. A null
+`repository` **with** errors is GitHub failing and will fix itself; the identical
+null in a clean reply means the repository is not there, which is a `SetupError`
+that takes over the screen. Check `errors.length` before concluding anything from
+a null.
+
 ## Merge queue API
 
 - `jump` is a flag on *joining*, not a move: `enqueuePullRequest` refuses a pull

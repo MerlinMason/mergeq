@@ -46,12 +46,20 @@ hyperlinks, so ⌘-click opens them where your terminal supports it.
 |---|---|
 | `--repo owner/name` | which repository, if not the current directory |
 | `--branch name` | which queued branch, if not the default |
-| `--interval 5` | seconds between refreshes |
+| `--interval 5` | seconds between refreshes, minimum 2 |
 | `--all` | start on the whole queue |
 | `--as username` | treat somebody else's GitHub account as "yours" |
 
 `--repo` falls back to `$MERGEQ_REPO`, then to the current directory's
 repository, so `export MERGEQ_REPO=owner/name` saves repeating it.
+
+`--interval` sets one clock that every panel refreshes on, and every panel is
+filled by a single GraphQL query, so a pull request cannot appear to leave
+review and join the queue at different moments. Two seconds is the floor: a
+refresh spends one of the 5000 GraphQL points an hour GitHub gives you — two
+when something of yours is in the queue and its checks are worth reading — and
+your token spends that budget on `gh` and everything else you run as well.
+Anything lower is rejected in favour of the floor.
 
 `$GH_TOKEN` or `$GITHUB_TOKEN` override `gh` when set. `NO_COLOR` is honoured.
 
