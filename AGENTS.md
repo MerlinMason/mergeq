@@ -141,9 +141,11 @@ a null.
 
 ## Releasing
 
-`npm version patch|minor`, `npm publish --otp=<code>` (2FA is on), then
-`git push --follow-tags`. The version in the top-right corner is inlined at build
-time — ask for it before debugging a rendering report.
+`npm version patch|minor` then `git push --follow-tags`. The tag triggers
+`.github/workflows/release.yml`, which typechecks, bundles, publishes to npm and
+cuts the GitHub release. It publishes over OIDC as a trusted publisher, so there
+is no npm token or one-time code in the loop. The version in the top-right corner
+is inlined at build time — ask for it before debugging a rendering report.
 
 The package is scoped because npm refuses unscoped names resembling existing ones
 (`mergeq` against `merge`/`merge2`, `mergequeue` against `merge-queue`). The command
