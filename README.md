@@ -77,11 +77,14 @@ the thing worth knowing before you open it:
 
 | | |
 |---|---|
-| `● ready` | green, nobody has reviewed it, it is yours |
+| `● ready` | it is yours to answer |
 | `◐ building` | checks still running |
 | `✗ ci red` | a check is failing, so they are probably still working |
 | `± changes` | somebody has already asked for changes |
-| `✓ approved` | already approved, so it can land without you |
+
+Somebody else approving it does not change any of that, and is not shown. You
+were asked, so it stays here until you answer — and the moment you review it,
+GitHub drops the request and the row goes.
 
 The columns give way to the title as the terminal narrows: the diff size goes
 first, then the author.

@@ -508,18 +508,17 @@ function YourPrs({
 const REVIEW_STATES = {
   broken: { glyph: "✗", label: "ci red", color: "red", dim: false },
   changes: { glyph: "±", label: "changes", color: "yellow", dim: false },
-  approved: { glyph: "✓", label: "approved", color: "green", dim: true },
   building: { glyph: "◐", label: "building", color: "yellow", dim: true },
   ready: { glyph: "●", label: "ready", color: "green", dim: false },
 };
 
 // The one thing worth knowing before you open it: whether opening it now would
-// be wasted. A red build or changes already requested means they are still
-// working; an approval means it can land without you.
+// be wasted, because they are still working. Somebody else's approval is not
+// that — the request is still yours until you answer it — and reading as
+// "approved" made an untouched pull request look done.
 function reviewState(review: Review) {
   if (review.checks === "failing") return REVIEW_STATES.broken;
   if (review.decision === "CHANGES_REQUESTED") return REVIEW_STATES.changes;
-  if (review.decision === "APPROVED") return REVIEW_STATES.approved;
   if (review.checks === "running") return REVIEW_STATES.building;
   return REVIEW_STATES.ready;
 }
