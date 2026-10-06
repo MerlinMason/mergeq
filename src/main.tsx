@@ -1,4 +1,5 @@
 import React from "react";
+import { parseArgs } from "node:util";
 import { render } from "ink";
 import App, { KEY_HINTS } from "./App.js";
 import { resolveRepo, resolveToken, SetupError } from "./auth.js";
@@ -23,12 +24,6 @@ const HELP = `
   Auth comes from the GitHub CLI. Run 'gh auth login' if you have not already.
 `;
 
-function flag(name: string): string | undefined {
-  const index = process.argv.indexOf(`--${name}`);
-  if (index === -1) return undefined;
-  return process.argv[index + 1];
-}
-
 function fail(error: unknown): never {
   if (error instanceof SetupError) {
     process.stderr.write(`\n  ✗ ${error.message}\n`);
@@ -40,23 +35,41 @@ function fail(error: unknown): never {
   process.exit(1);
 }
 
+function flags() {
+  try {
+    return parseArgs({
+      options: {
+        repo: { type: "string" },
+        branch: { type: "string" },
+        interval: { type: "string" },
+        as: { type: "string" },
+        all: { type: "boolean" },
+        help: { type: "boolean", short: "h" },
+      },
+    }).values;
+  } catch (caught) {
+    throw new SetupError((caught as Error).message, ["mergeq --help"]);
+  }
+}
+
 async function main() {
-  if (process.argv.includes("--help") || process.argv.includes("-h")) {
+  const flag = flags();
+  if (flag.help) {
     process.stdout.write(HELP);
     return;
   }
 
-  const spec = flag("repo") ?? process.env.MERGEQ_REPO;
+  const spec = flag.repo ?? process.env.MERGEQ_REPO;
   if (spec && !/^[^/]+\/[^/]+$/.test(spec)) {
     throw new SetupError(`Invalid --repo "${spec}".`, ["Use owner/name"]);
   }
 
   const [token, repo] = await Promise.all([resolveToken(), resolveRepo(spec)]);
 
-  const branch = flag("branch") ?? repo.defaultBranch;
+  const branch = flag.branch ?? repo.defaultBranch;
   // The floor is a rate limit, not a preference: a tick costs one of the 5000
   // GraphQL points an hour buys, two when something of yours is queued.
-  const seconds = Number(flag("interval") ?? 5);
+  const seconds = Number(flag.interval ?? 5);
   const interval = Math.max(2, Number.isFinite(seconds) ? seconds : 5) * 1000;
 
   // A frame is updated by moving the cursor up by the height of the last one. On
@@ -64,9 +77,9 @@ async function main() {
   // stranded in, and Ink restores the primary screen on the way out.
   render(
     <App
-      target={{ token, owner: repo.owner, name: repo.name, branch, as: flag("as") }}
+      target={{ token, owner: repo.owner, name: repo.name, branch, as: flag.as }}
       interval={interval}
-      all={process.argv.includes("--all")}
+      all={flag.all ?? false}
     />,
     { alternateScreen: true },
   );

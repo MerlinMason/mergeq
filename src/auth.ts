@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import type { Repo } from "./link.js";
 
 const run = promisify(execFile);
 
@@ -42,9 +43,7 @@ export async function resolveToken(): Promise<string> {
   return token;
 }
 
-type Repo = { owner: string; name: string; defaultBranch: string };
-
-export async function resolveRepo(spec?: string): Promise<Repo> {
+export async function resolveRepo(spec?: string): Promise<Repo & { defaultBranch: string }> {
   const raw = await gh([
     "repo",
     "view",

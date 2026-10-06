@@ -9,16 +9,14 @@ export type EntryState =
   | "LOCKED";
 
 export type Entry = {
+  id: string;
+  number: number;
+  title: string;
+  author: string;
   position: number;
   state: EntryState;
   estimatedTimeToMerge: number | null;
-  headCommit: { oid: string } | null;
-  pullRequest: {
-    id: string;
-    number: number;
-    title: string;
-    author: { login: string } | null;
-  };
+  headOid: string | null;
 };
 
 export type Queue = {
@@ -184,6 +182,18 @@ query($owner:String!,$name:String!,$branch:String!,$reviews:String!,$prs:String!
   rate: search(query:$rate, type:ISSUE, first:${RATE_SAMPLE}){ nodes{ ... on PullRequest { number mergedAt } } }
 }`;
 
+type Author = { login: string } | null;
+
+const loginOf = (author: Author) => author?.login ?? "unknown";
+
+type EntryNode = {
+  position: number;
+  state: EntryState;
+  estimatedTimeToMerge: number | null;
+  headCommit: { oid: string } | null;
+  pullRequest: { id: string; number: number; title: string; author: Author };
+};
+
 type RollupNode = { commits: { nodes: { commit: { statusCheckRollup: { state: string } | null } }[] } };
 
 type ReviewNode = RollupNode & {
@@ -192,7 +202,7 @@ type ReviewNode = RollupNode & {
   createdAt: string;
   additions: number;
   deletions: number;
-  author: { login: string } | null;
+  author: Author;
   reviewDecision: Review["decision"];
   requests: {
     nodes: { createdAt: string; requestedReviewer: { __typename: string; login?: string } | null }[];
@@ -205,7 +215,7 @@ type PrNode = RollupNode & {
   title: string;
   isDraft: boolean;
   updatedAt: string;
-  author: { login: string } | null;
+  author: Author;
   reviewDecision: Review["decision"];
   reviewRequests: { nodes: { requestedReviewer: { login?: string; slug?: string } | null }[] };
 };
@@ -213,7 +223,7 @@ type PrNode = RollupNode & {
 type OutcomeNode = {
   number: number;
   title: string;
-  author: { login: string } | null;
+  author: Author;
   removed: { nodes: { createdAt: string; reason: string | null }[] };
 };
 
@@ -227,7 +237,7 @@ type DashboardData = {
     mergeQueue: {
       url: string;
       configuration: { maximumEntriesToBuild: number | null } | null;
-      entries: { totalCount: number; nodes: (Entry | null)[] };
+      entries: { totalCount: number; nodes: (EntryNode | null)[] };
     } | null;
   } | null;
   reviews: Search<ReviewNode>;
@@ -236,7 +246,9 @@ type DashboardData = {
   rate: Search<MergedNode>;
 };
 
-export type Section = "queue" | "reviews" | "prs" | "outcomes" | "rate";
+export const SECTIONS = ["queue", "reviews", "prs", "outcomes", "rate"] as const;
+
+type Section = (typeof SECTIONS)[number];
 
 /**
  * A section GitHub did not answer for is null and named in `missing` — which
@@ -272,6 +284,17 @@ function terms(...parts: (string | false)[]): string {
   return parts.filter(Boolean).join(" ");
 }
 
+function toEntry({ pullRequest, headCommit, ...entry }: EntryNode): Entry {
+  return {
+    ...entry,
+    id: pullRequest.id,
+    number: pullRequest.number,
+    title: pullRequest.title,
+    author: loginOf(pullRequest.author),
+    headOid: headCommit?.oid ?? null,
+  };
+}
+
 function toReviews(nodes: ReviewNode[], login: string): Review[] {
   return nodes
     .map((node) => {
@@ -284,7 +307,7 @@ function toReviews(nodes: ReviewNode[], login: string): Review[] {
       return {
         number: node.number,
         title: node.title,
-        author: node.author?.login ?? "unknown",
+        author: loginOf(node.author),
         additions: node.additions,
         deletions: node.deletions,
         requestedAt: new Date(asked?.createdAt ?? node.createdAt),
@@ -300,7 +323,7 @@ function toPrs(nodes: PrNode[]): Pr[] {
     id: node.id,
     number: node.number,
     title: node.title,
-    author: node.author?.login ?? "unknown",
+    author: loginOf(node.author),
     draft: node.isDraft,
     updatedAt: new Date(node.updatedAt),
     decision: node.reviewDecision,
@@ -319,7 +342,7 @@ function toOutcomes(nodes: OutcomeNode[]): Outcome[] {
       outcomes.push({
         number: node.number,
         title: node.title,
-        author: node.author?.login ?? "unknown",
+        author: loginOf(node.author),
         kind: removal.reason === "merged" ? "merged" : "ejected",
         reason: removal.reason ?? "removed",
         at: new Date(removal.createdAt),
@@ -417,13 +440,7 @@ export async function fetchDashboard(opts: {
   const outcomes = rows(data.outcomes);
   const merged = rows(data.rate);
 
-  const sections: [Section, unknown][] = [
-    ["queue", merging],
-    ["reviews", reviews],
-    ["prs", prs],
-    ["outcomes", outcomes],
-    ["rate", merged],
-  ];
+  const answered: Record<Section, unknown> = { queue: merging, reviews, prs, outcomes, rate: merged };
 
   return {
     at: new Date(),
@@ -432,15 +449,17 @@ export async function fetchDashboard(opts: {
       url: merging.url,
       maximumEntriesToBuild: merging.configuration?.maximumEntriesToBuild ?? null,
       totalCount: merging.entries.totalCount,
-      entries: merging.entries.nodes.filter((node): node is Entry => node !== null),
+      entries: merging.entries.nodes.filter((node) => node !== null).map(toEntry),
     },
     reviews: reviews && toReviews(reviews, viewer),
     prs: prs && toPrs(prs),
     outcomes: outcomes && toOutcomes(outcomes),
     rate: merged && toRate(merged),
-    missing: sections.filter(([, value]) => !value).map(([section]) => section),
+    missing: SECTIONS.filter((section) => !answered[section]),
   };
 }
+
+const PASSED = new Set(["SUCCESS", "NEUTRAL", "SKIPPED"]);
 
 export async function fetchChecks(opts: {
   token: string;
@@ -490,8 +509,7 @@ export async function fetchChecks(opts: {
       if (context.__typename === "CheckRun") {
         if (context.status === "COMPLETED") {
           done += 1;
-          if (context.conclusion && !["SUCCESS", "NEUTRAL", "SKIPPED"].includes(context.conclusion))
-            failing += 1;
+          if (context.conclusion && !PASSED.has(context.conclusion)) failing += 1;
         } else if (!running) {
           running = context.name;
         }
@@ -529,13 +547,8 @@ export async function act(opts: {
 }): Promise<void> {
   const id = opts.pullRequestId;
 
-  if (opts.action === "eject") {
-    await graphql(opts.token, DEQUEUE, { id });
-    return;
-  }
-
-  if (opts.action === "queue") {
-    await graphql(opts.token, ENQUEUE, { id });
+  if (opts.action !== "jump") {
+    await graphql(opts.token, opts.action === "eject" ? DEQUEUE : ENQUEUE, { id });
     return;
   }
 

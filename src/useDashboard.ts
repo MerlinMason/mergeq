@@ -1,15 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  fetchChecks,
-  fetchDashboard,
-  type Checks,
-  type Outcome,
-  type Pr,
-  type Queue,
-  type Rate,
-  type Review,
-  type Snapshot,
-} from "./github.js";
+import { fetchChecks, fetchDashboard, SECTIONS, type Checks, type Snapshot } from "./github.js";
 import { SetupError } from "./auth.js";
 
 export type Target = {
@@ -20,40 +10,24 @@ export type Target = {
   as?: string;
 };
 
-type Held = {
-  queue: Queue | null;
-  reviews: Review[] | null;
-  prs: Pr[] | null;
-  outcomes: Outcome[] | null;
-  rate: Rate | null;
+type Held = Omit<Snapshot, "at" | "missing"> & {
   /** When a reply last answered for something, so a panel can date its rows. */
   at: Date | null;
 };
 
-const NOTHING: Held = { queue: null, reviews: null, prs: null, outcomes: null, rate: null, at: null };
-
-const SECTIONS = 5;
+const NOTHING: Held = { viewer: "", queue: null, reviews: null, prs: null, outcomes: null, rate: null, at: null };
 
 // Keep what we had for any section GitHub did not answer for: blanking a panel
 // is worse than dating its rows.
-function merge(held: Held, snapshot: Snapshot): Held {
-  const missing = new Set(snapshot.missing);
-
-  return {
-    queue: missing.has("queue") ? held.queue : snapshot.queue,
-    reviews: missing.has("reviews") ? held.reviews : snapshot.reviews,
-    prs: missing.has("prs") ? held.prs : snapshot.prs,
-    outcomes: missing.has("outcomes") ? held.outcomes : snapshot.outcomes,
-    rate: missing.has("rate") ? held.rate : snapshot.rate,
-    // A reply that answered for nothing leaves the clock where it was.
-    at: missing.size === SECTIONS ? held.at : snapshot.at,
-  };
+function merge(held: Held, { missing, ...next }: Snapshot): Held {
+  for (const section of missing) Object.assign(next, { [section]: held[section] });
+  // A reply that answered for nothing leaves the clock where it was.
+  return missing.length === SECTIONS.length ? { ...next, at: held.at } : next;
 }
 
 export function useDashboard(target: Target, tick: number, mine: boolean) {
   const [held, setHeld] = useState<Held>(NOTHING);
   const [checks, setChecks] = useState<Map<string, Checks>>(new Map());
-  const [viewer, setViewer] = useState("");
   const [fatal, setFatal] = useState<SetupError | null>(null);
   const [fetching, setFetching] = useState(false);
   // Why the clock stopped, rather than something to show in place of the rows.
@@ -71,7 +45,6 @@ export function useDashboard(target: Target, tick: number, mine: boolean) {
 
       failures.current = 0;
       cooldown.current = 0;
-      setViewer(snapshot.viewer);
       setHeld((previous) => merge(previous, snapshot));
       setFailing(
         snapshot.missing.length > 0
@@ -80,9 +53,8 @@ export function useDashboard(target: Target, tick: number, mine: boolean) {
       );
 
       const oids = (snapshot.queue?.entries ?? [])
-        .filter((entry) => entry.pullRequest.author?.login === snapshot.viewer)
-        .map((entry) => entry.headCommit?.oid)
-        .filter((oid): oid is string => Boolean(oid));
+        .filter((entry) => entry.author === snapshot.viewer)
+        .flatMap((entry) => entry.headOid ?? []);
 
       if (oids.length === 0) {
         setChecks(new Map());
@@ -131,5 +103,5 @@ export function useDashboard(target: Target, tick: number, mine: boolean) {
     });
   }, [poll, target, mine, tick, fatal]);
 
-  return { ...held, viewer: target.as ?? viewer, checks, fatal, failing, fetching };
+  return { ...held, checks, fatal, failing, fetching };
 }

@@ -1,4 +1,6 @@
-import { execFile, execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
+import { delimiter, join } from "node:path";
 import { BEL, ESC } from "./link.js";
 
 type Send = (title: string, body: string) => void;
@@ -14,11 +16,8 @@ function supportsEscapeNotifications(): boolean {
 
 function terminalNotifier(): string | null {
   if (process.platform !== "darwin") return null;
-  try {
-    return execFileSync("which", ["terminal-notifier"], { encoding: "utf8" }).trim() || null;
-  } catch {
-    return null;
-  }
+  const paths = (process.env.PATH ?? "").split(delimiter).map((dir) => join(dir, "terminal-notifier"));
+  return paths.find((path) => existsSync(path)) ?? null;
 }
 
 function resolve(): Send {

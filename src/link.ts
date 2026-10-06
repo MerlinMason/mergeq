@@ -10,8 +10,10 @@ export function link(text: string, url: string): string {
   return `${ESC}]8;;${url}${BEL}${text}${ESC}]8;;${BEL}`;
 }
 
-export function pullRequestUrl(owner: string, name: string, number: number): string {
-  return `https://github.com/${owner}/${name}/pull/${number}`;
+export type Repo = { owner: string; name: string };
+
+export function pullRequestUrl(repo: Repo, number: number): string {
+  return `https://github.com/${repo.owner}/${repo.name}/pull/${number}`;
 }
 
 export function openUrl(url: string): void {
