@@ -40,7 +40,7 @@ recently, not from GitHub's own estimate.
 
 ## Keys
 
-| | |
+| Key | Does |
 |---|---|
 | `↑` `↓` | select a pull request |
 | `⏎` | open it in the browser |
@@ -53,7 +53,7 @@ recently, not from GitHub's own estimate.
 
 ## Options
 
-| | |
+| Option | Does |
 |---|---|
 | `--repo owner/name` | repository to watch (default: `$MERGEQ_REPO`, then the current directory) |
 | `--branch name` | queued branch (default: the repository's default branch) |
