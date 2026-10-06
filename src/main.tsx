@@ -16,7 +16,8 @@ const HELP = `
     --branch    Queued branch (defaults to the repository's default branch)
     --interval  Seconds between refreshes (default 5, minimum 2)
     --all       Start on the full queue rather than just your pull requests
-    --as        A GitHub username to follow instead of your own
+    --as        View somebody else's pull requests. Actions still run
+                as you, with your token
 
   Keys
     ${KEY_HINTS}

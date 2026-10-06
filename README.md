@@ -59,7 +59,7 @@ recently, not from GitHub's own estimate.
 | `--branch name` | queued branch (default: the repository's default branch) |
 | `--interval 5` | seconds between refreshes, minimum 2 |
 | `--all` | start on everybody's pull requests |
-| `--as username` | follow somebody else's account |
+| `--as username` | view somebody else's pull requests; anything you do still runs as you |
 
 ## Development
 
