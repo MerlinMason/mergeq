@@ -10,9 +10,16 @@ where your pull requests are, and when they will land.
 You need Node 22+ and the [GitHub CLI](https://cli.github.com), logged in.
 mergeq uses the token from `gh`, so it needs no setup of its own.
 
+Try it:
+
 ```bash
-npx @merlinmason/mergeq        # try it
-npm i -g @merlinmason/mergeq   # or install it, then run `mergeq`
+npx @merlinmason/mergeq
+```
+
+Or install it, then run `mergeq`:
+
+```bash
+npm i -g @merlinmason/mergeq
 ```
 
 Run it inside a checkout of the repository you want to watch, or pass `--repo`.
