@@ -4,7 +4,7 @@ What the source cannot tell you. The README covers what the app does.
 
 ## Do not mutate a real queue to find things out
 
-`e` (eject), `j` (jump) and `m` (queue) mutate the watched repository, usually a
+`e` (eject), `j` (jump) and `q` (queue) mutate the watched repository, usually a
 shared one. Ejecting delays someone's work; a failed jump leaves their pull request
 out of the queue; queueing merges it. Read the schema instead, and let whoever is driving test on their own pull
 request. `--repo` defaults to the current directory, so running it in a work

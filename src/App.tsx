@@ -47,10 +47,10 @@ const STARTED_AT = Date.now();
 // Offered only for your own pull requests, so listed only when one is selected —
 // and appended, so the keys that are always there never move.
 const keyHints = (extra: string) =>
-  `↑↓ pick · ⏎  open PR · a toggle all/yours · o open queue · q quit${extra ? ` · ${extra}` : ""}`;
+  `↑↓ pick · ⏎  open PR · a toggle all/yours · o open queue · x exit${extra ? ` · ${extra}` : ""}`;
 
 const QUEUED_KEYS = "e eject · j jump";
-const APPROVED_KEYS = "m queue";
+const APPROVED_KEYS = "q queue";
 
 export const KEY_HINTS = keyHints(`${APPROVED_KEYS} · ${QUEUED_KEYS}`);
 
@@ -1141,7 +1141,7 @@ export default function App({
   useInput((input, key) => {
     if (confirm) {
       if (confirm.pending) return;
-      if (key.escape || input === "q") return dismiss();
+      if (key.escape || input === "x") return dismiss();
       if (confirm.error) return;
 
       // Focus starts on cancel, so a reflex return is the safe answer.
@@ -1151,7 +1151,7 @@ export default function App({
       return;
     }
 
-    if (input === "q" || key.escape || (key.ctrl && input === "c")) return exit();
+    if (input === "x" || key.escape || (key.ctrl && input === "c")) return exit();
     if (input === "a") return setShowAll((value) => !value);
     if (key.downArrow)
       return setSelection((value) => Math.min(value + 1, Math.max(0, selectable.length - 1)));
@@ -1161,7 +1161,7 @@ export default function App({
     if (input === "o" && queue) return openUrl(queue.url);
     if (input === "e" && actionable) return ask("eject", actionable.pullRequest, actionable.position);
     if (input === "j" && actionable) return ask("jump", actionable.pullRequest, actionable.position);
-    if (input === "m" && queueable) return ask("queue", queueable, null);
+    if (input === "q" && queueable) return ask("queue", queueable, null);
   });
 
   if (confirm) {
