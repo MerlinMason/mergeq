@@ -99,7 +99,7 @@ Most actionable first, so the top of the list is the next thing to do:
 
 | | |
 |---|---|
-| `✓ approved` | queue it |
+| `✓ approved` | queue it — select it and press `m` |
 | `± changes` | somebody has asked for changes |
 | `✗ ci red` | a check is failing |
 | `○ waiting` | nobody has reviewed it yet |

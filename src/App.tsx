@@ -44,12 +44,15 @@ const PR_LIMIT = 10;
 
 const STARTED_AT = Date.now();
 
-// Offered only for your own entries, so listed only when one is selected — and
-// appended, so the keys that are always there never move.
-const keyHints = (actionable: boolean) =>
-  `↑↓ pick · ⏎  open PR · a toggle all/yours · o open queue · q quit${actionable ? " · e eject · j jump" : ""}`;
+// Offered only for your own pull requests, so listed only when one is selected —
+// and appended, so the keys that are always there never move.
+const keyHints = (extra: string) =>
+  `↑↓ pick · ⏎  open PR · a toggle all/yours · o open queue · q quit${extra ? ` · ${extra}` : ""}`;
 
-export const KEY_HINTS = keyHints(true);
+const QUEUED_KEYS = "e eject · j jump";
+const APPROVED_KEYS = "m queue";
+
+export const KEY_HINTS = keyHints(`${APPROVED_KEYS} · ${QUEUED_KEYS}`);
 
 function Spinner({ color }: { color: string }) {
   const { frame } = useAnimation({ interval: 80 });
@@ -783,11 +786,18 @@ const ACTIONS: Record<Action, { accent: string; verb: string; question: string; 
     consequence:
       "It leaves the queue and rejoins at the front, so its checks start again and everything ahead of it waits longer.",
   },
+  queue: {
+    accent: "green",
+    verb: "Queue",
+    question: "Add this to the merge queue?",
+    consequence: "It joins at the back. You can eject it again from the queue panel.",
+  },
 };
 
 export type Confirming = {
   action: Action;
-  entry: Entry;
+  pr: { id: string; number: number; title: string };
+  position: number | null;
   focused: boolean;
   pending: boolean;
   error: Error | null;
@@ -827,7 +837,7 @@ function Confirm({
   depth: number;
   width: number;
 }) {
-  const { action, entry, focused, pending, error } = confirm;
+  const { action, pr, position, focused, pending, error } = confirm;
   const { accent, verb, question, consequence } = ACTIONS[action];
 
   const card = Math.min(72, Math.max(48, width - 8));
@@ -854,14 +864,14 @@ function Confirm({
           <Box marginTop={1} flexDirection="column">
             <Box>
               <Text color={accent}>{"│ "}</Text>
-              <Text bold>#{entry.pullRequest.number}</Text>
+              <Text bold>#{pr.number}</Text>
               <Text>{"  "}</Text>
-              <Text wrap="truncate">{entry.pullRequest.title}</Text>
+              <Text wrap="truncate">{pr.title}</Text>
             </Box>
             <Box>
               <Text color={accent}>{"│ "}</Text>
               <Text dimColor>
-                position {entry.position} of {depth}
+                {position === null ? `${depth} already queued` : `position ${position} of ${depth}`}
               </Text>
             </Box>
           </Box>
@@ -1079,6 +1089,22 @@ export default function App({
   const selectedOutcome = recent.find((outcome) => outcome === selected) ?? null;
   const selectedReview = toReview.find((review) => review === selected) ?? null;
   const selectedPr = prsShown.find((pr) => pr === selected) ?? null;
+  const queueable =
+    selectedPr && selectedPr.author === viewer && prState(selectedPr) === PR_STATES.approved
+      ? selectedPr
+      : null;
+
+  const ask = (action: Action, pr: Confirming["pr"], position: number | null) =>
+    setConfirm({
+      action,
+      pr,
+      position,
+      // Queueing your own approved work is the thing you came to do, not something
+      // to be talked out of, so it alone opens on the action rather than cancel.
+      focused: action === "queue",
+      pending: false,
+      error: null,
+    });
 
   // Dismissing the dialog aborts the attempt, so a jump that is waiting to rejoin
   // the queue does not land after somebody has cancelled it.
@@ -1095,7 +1121,7 @@ export default function App({
         await act({
           token: target.token,
           action: pending.action,
-          pullRequestId: pending.entry.pullRequest.id,
+          pullRequestId: pending.pr.id,
           signal: controller.signal,
         });
         setConfirm(null);
@@ -1133,10 +1159,9 @@ export default function App({
     if (key.return && selected)
       return openUrl(pullRequestUrl(target.owner, target.name, numberOf(selected)));
     if (input === "o" && queue) return openUrl(queue.url);
-    if (input === "e" && actionable)
-      return setConfirm({ action: "eject", entry: actionable, focused: false, pending: false, error: null });
-    if (input === "j" && actionable)
-      return setConfirm({ action: "jump", entry: actionable, focused: false, pending: false, error: null });
+    if (input === "e" && actionable) return ask("eject", actionable.pullRequest, actionable.position);
+    if (input === "j" && actionable) return ask("jump", actionable.pullRequest, actionable.position);
+    if (input === "m" && queueable) return ask("queue", queueable, null);
   });
 
   if (confirm) {
@@ -1196,7 +1221,7 @@ export default function App({
 
       <Box marginBottom={1}>
         <Text dimColor wrap="truncate">
-          {keyHints(actionable !== null)}
+          {keyHints(actionable ? QUEUED_KEYS : queueable ? APPROVED_KEYS : "")}
         </Text>
       </Box>
 

@@ -62,6 +62,7 @@ export type Review = {
 };
 
 export type Pr = {
+  id: string;
   number: number;
   title: string;
   author: string;
@@ -166,7 +167,7 @@ query($owner:String!,$name:String!,$branch:String!,$reviews:String!,$prs:String!
     }}}
   }}}
   prs: search(query:$prs, type:ISSUE, first:${PR_FETCH_LIMIT}){ nodes{ ... on PullRequest {
-    number title isDraft updatedAt reviewDecision
+    id number title isDraft updatedAt reviewDecision
     author{ login }
     ${ROLLUP}
     reviewRequests(first:5){ nodes{ requestedReviewer{
@@ -199,6 +200,7 @@ type ReviewNode = RollupNode & {
 };
 
 type PrNode = RollupNode & {
+  id: string;
   number: number;
   title: string;
   isDraft: boolean;
@@ -295,6 +297,7 @@ function toReviews(nodes: ReviewNode[], login: string): Review[] {
 
 function toPrs(nodes: PrNode[]): Pr[] {
   return nodes.map((node) => ({
+    id: node.id,
     number: node.number,
     title: node.title,
     author: node.author?.login ?? "unknown",
@@ -505,16 +508,17 @@ export async function fetchChecks(opts: {
   return result;
 }
 
-export type Action = "eject" | "jump";
+export type Action = "eject" | "jump" | "queue";
 
 const DEQUEUE = `mutation($id:ID!){ dequeuePullRequest(input:{ id:$id }){ clientMutationId } }`;
+const ENQUEUE = `mutation($id:ID!){ enqueuePullRequest(input:{ pullRequestId:$id }){ clientMutationId } }`;
 const ENQUEUE_FRONT = `mutation($id:ID!){ enqueuePullRequest(input:{ pullRequestId:$id, jump:true }){ clientMutationId } }`;
 
 const ALREADY_QUEUED = "already in the queue";
 const REJOIN_ATTEMPTS = 5;
 const REJOIN_WAIT_MS = 600;
 
-// GitHub exposes no viewerCan* field for either of these, so the only way to
+// GitHub exposes no viewerCan* field for any of these, so the only way to
 // learn you are not allowed is the error. Ejecting needs write access; jumping
 // is admin-only by default, and undocumented.
 export async function act(opts: {
@@ -527,6 +531,11 @@ export async function act(opts: {
 
   if (opts.action === "eject") {
     await graphql(opts.token, DEQUEUE, { id });
+    return;
+  }
+
+  if (opts.action === "queue") {
+    await graphql(opts.token, ENQUEUE, { id });
     return;
   }
 
