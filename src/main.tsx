@@ -73,6 +73,17 @@ async function main() {
   const seconds = Number(flag.interval ?? 5);
   const interval = Math.max(2, Number.isFinite(seconds) ? seconds : 5) * 1000;
 
+  // A terminal that changes width rewraps what is already on screen, so the last
+  // frame no longer covers the number of rows Ink erases and the leftovers strand
+  // above the new one. Registered ahead of Ink's own listener, and only when the
+  // width changed: an unchanged frame writes nothing, which would leave it blank.
+  let columns = process.stdout.columns;
+  process.stdout.prependListener("resize", () => {
+    if (process.stdout.columns === columns) return;
+    columns = process.stdout.columns;
+    process.stdout.write("\x1b[2J\x1b[H");
+  });
+
   // A frame is updated by moving the cursor up by the height of the last one. On
   // the alternate screen there is no scrollback for a mis-counted frame to be
   // stranded in, and Ink restores the primary screen on the way out.
